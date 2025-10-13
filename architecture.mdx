@@ -1,0 +1,480 @@
+---
+title: "System Architecture"
+description: "Understanding Sphyre's technical architecture and design principles"
+---
+
+# System Architecture
+
+Sphyre is built on a modular, decentralized architecture that separates concerns across multiple specialized applications. This design ensures scalability, security, and maintainability.
+
+## High-Level Architecture
+
+```mermaid
+graph TB
+    subgraph "Frontend Applications"
+        ALV[Sphyre ALV<br/>User Wallet<br/>Next.js]
+        ISS[Sphyre Issuers<br/>Issuer Dashboard<br/>React]
+        VER[Sphyre Verifier<br/>Verifier Portal<br/>Next.js]
+    end
+    
+    subgraph "Backend Services"
+        FE[Fortro Engine<br/>API Server<br/>Rust]
+    end
+    
+    subgraph "Storage Layer"
+        MONGO[(MongoDB<br/>User Data)]
+        IPFS[IPFS<br/>Credential Storage]
+        BC[Ethereum<br/>Blockchain]
+    end
+    
+    ALV <-->|REST API| FE
+    ISS <-->|REST API| FE
+    VER <-->|REST API| FE
+    
+    FE <--> MONGO
+    FE <--> IPFS
+    FE <--> BC
+    
+    style ALV fill:#818CF8
+    style ISS fill:#818CF8
+    style VER fill:#818CF8
+    style FE fill:#6366F1
+    style MONGO fill:#10B981
+    style IPFS fill:#10B981
+    style BC fill:#10B981
+```
+
+## Core Components
+
+### 1. Fortro Engine (Backend API)
+
+The central backend service that orchestrates all SSI operations.
+
+**Technology Stack:**
+- **Language:** Rust
+- **Framework:** Actix-web
+- **Database:** MongoDB
+- **Storage:** IPFS (Kubo)
+- **Blockchain:** Ethereum (ethers-rs)
+
+**Key Features:**
+- RESTful API architecture
+- JWT-based authentication
+- Post-quantum cryptography (Kyber-Dilithium)
+- Concurrent request handling
+- Automatic credential verification
+
+**API Endpoints:**
+```
+/api/auth/*          - Authentication & registration
+/api/wallet/*        - User wallet operations
+/api/issuer/*        - Credential issuance
+/api/verifier/*      - Verification requests
+/api/qr/*            - QR code generation
+```
+
+<Card title="Learn More" icon="server" href="/components/fortro-engine">
+  Detailed Fortro Engine documentation
+</Card>
+
+### 2. Sphyre ALV (User Wallet)
+
+Progressive Web App for end-users to manage their digital identity.
+
+**Technology Stack:**
+- **Framework:** Next.js 14 (App Router)
+- **Language:** TypeScript
+- **Crypto:** tweetnacl, bip39
+- **UI:** TailwindCSS, shadcn/ui
+
+**Key Features:**
+- 12-word seed phrase generation
+- DID creation and management
+- Credential storage and presentation
+- QR code scanning
+- Consent management
+- Zero-knowledge proof generation
+- Offline mode support
+
+<Card title="Learn More" icon="wallet" href="/components/sphyre-alv">
+  Detailed Sphyre ALV documentation
+</Card>
+
+### 3. Sphyre Issuers (Issuer Dashboard)
+
+Web application for organizations to issue and manage credentials.
+
+**Technology Stack:**
+- **Framework:** React 18
+- **Language:** TypeScript
+- **State Management:** React Context
+- **UI:** TailwindCSS, Material-UI
+
+**Key Features:**
+- Schema creation and management
+- Template customization
+- Credential issuance workflow
+- Request approval system
+- Credential revocation
+- Analytics dashboard
+
+<Card title="Learn More" icon="building" href="/components/sphyre-issuers">
+  Detailed Sphyre Issuers documentation
+</Card>
+
+### 4. Sphyre Verifier (Verification Portal)
+
+Application for organizations to request and verify credentials.
+
+**Technology Stack:**
+- **Framework:** Next.js 14
+- **Language:** TypeScript
+- **UI:** TailwindCSS, shadcn/ui
+
+**Key Features:**
+- Presentation request creation
+- QR code generation for requests
+- Credential verification
+- Selective disclosure support
+- Zero-knowledge proof verification
+- Verification history
+
+<Card title="Learn More" icon="check-circle" href="/components/sphyre-verifier">
+  Detailed Sphyre Verifier documentation
+</Card>
+
+## Data Flow Architecture
+
+### Credential Issuance Flow
+
+```mermaid
+sequenceDiagram
+    participant U as User (ALV)
+    participant I as Issuer Dashboard
+    participant F as Fortro Engine
+    participant DB as MongoDB
+    participant IPFS as IPFS
+    participant BC as Blockchain
+    
+    U->>F: 1. Submit credential request
+    F->>DB: 2. Store request
+    I->>F: 3. Fetch pending requests
+    F->>I: 4. Return requests
+    I->>F: 5. Approve request
+    F->>F: 6. Generate VC + Sign
+    F->>IPFS: 7. Upload credential
+    IPFS->>F: 8. Return IPFS hash
+    F->>BC: 9. Anchor hash on chain
+    BC->>F: 10. Return tx receipt
+    F->>DB: 11. Update credential record
+    F->>U: 12. Notify user
+    U->>F: 13. Fetch credential
+    F->>U: 14. Deliver VC
+```
+
+### Credential Verification Flow
+
+```mermaid
+sequenceDiagram
+    participant V as Verifier
+    participant U as User (ALV)
+    participant F as Fortro Engine
+    participant IPFS as IPFS
+    participant BC as Blockchain
+    
+    V->>F: 1. Create presentation request
+    F->>V: 2. Return request QR code
+    V->>U: 3. Show QR code
+    U->>F: 4. Fetch request details
+    F->>U: 5. Return requirements
+    U->>U: 6. User approves + selects fields
+    U->>F: 7. Submit presentation
+    F->>IPFS: 8. Verify IPFS hash
+    F->>BC: 9. Verify blockchain anchor
+    F->>F: 10. Verify cryptographic proof
+    F->>V: 11. Return verification result
+    V->>V: 12. Display verified data
+```
+
+## Storage Architecture
+
+### MongoDB Collections
+
+```javascript
+// Users Collection
+{
+  did: "did:alyra:...",
+  publicKey: "base64_string",
+  email: "user@example.com",
+  createdAt: ISODate,
+  walletData: { ... }
+}
+
+// Credentials Collection
+{
+  id: "credential_id",
+  holderDid: "did:alyra:...",
+  issuerDid: "did:alyra:...",
+  schemaId: "schema_id",
+  claims: { ... },
+  ipfsHash: "Qm...",
+  blockchainTxHash: "0x...",
+  proof: { ... },
+  status: "active|revoked",
+  issuedAt: ISODate,
+  expiresAt: ISODate
+}
+
+// Schemas Collection
+{
+  id: "schema_id",
+  name: "National ID",
+  version: "1.0",
+  fields: [ ... ],
+  issuerDid: "did:alyra:...",
+  createdAt: ISODate
+}
+```
+
+### IPFS Storage
+
+Credentials are stored on IPFS for decentralized, content-addressed storage:
+
+```json
+{
+  "@context": ["https://www.w3.org/2018/credentials/v1"],
+  "type": ["VerifiableCredential"],
+  "issuer": "did:alyra:...",
+  "issuanceDate": "2025-01-01T00:00:00Z",
+  "credentialSubject": {
+    "id": "did:alyra:...",
+    "claims": { ... }
+  },
+  "proof": {
+    "type": "Dilithium",
+    "created": "2025-01-01T00:00:00Z",
+    "proofPurpose": "assertionMethod",
+    "verificationMethod": "did:alyra:...#keys-1",
+    "signature": "base64_signature"
+  }
+}
+```
+
+### Blockchain Anchoring
+
+Credential hashes are anchored on Ethereum for immutability:
+
+```solidity
+// Smart Contract Storage
+mapping(bytes32 => CredentialAnchor) public anchors;
+
+struct CredentialAnchor {
+    bytes32 ipfsHash;
+    address issuer;
+    uint256 timestamp;
+    bool revoked;
+}
+```
+
+## Security Architecture
+
+### Cryptographic Layer
+
+<CardGroup cols={2}>
+  <Card title="Post-Quantum Crypto" icon="atom">
+    **Kyber** for key encapsulation  
+    **Dilithium** for digital signatures
+  </Card>
+  
+  <Card title="DID Generation" icon="key">
+    Ed25519 key pair from seed phrase  
+    `did:alyra:` + base64(publicKey)
+  </Card>
+  
+  <Card title="Credential Signing" icon="signature">
+    Issuer signs with Dilithium  
+    Proof attached to credential
+  </Card>
+  
+  <Card title="Zero-Knowledge Proofs" icon="shield-halved">
+    Selective disclosure without revealing data  
+    Age verification, citizenship, etc.
+  </Card>
+</CardGroup>
+
+### Authentication Flow
+
+```mermaid
+sequenceDiagram
+    participant C as Client App
+    participant F as Fortro Engine
+    participant DB as MongoDB
+    
+    C->>F: 1. POST /api/auth/login (DID, signature)
+    F->>F: 2. Verify signature
+    F->>DB: 3. Fetch user data
+    DB->>F: 4. Return user
+    F->>F: 5. Generate JWT token
+    F->>C: 6. Return JWT
+    
+    Note over C,F: Subsequent requests
+    C->>F: 7. API call + Authorization header
+    F->>F: 8. Verify JWT
+    F->>F: 9. Extract DID from token
+    F->>C: 10. Return response
+```
+
+## Network Architecture
+
+### Deployment Topology
+
+```
+┌─────────────────────────────────────────┐
+│           Load Balancer / CDN            │
+└─────────────────────────────────────────┘
+                    │
+        ┌───────────┼───────────┬──────────┐
+        │           │           │          │
+┌───────▼──────┐ ┌─▼────────┐ ┌▼────────┐ │
+│ app.sphyre   │ │ issuers. │ │verifier.│ │
+│    .tech     │ │sphyre    │ │sphyre   │ │
+│  (ALV App)   │ │.tech     │ │.tech    │ │
+└──────────────┘ └──────────┘ └─────────┘ │
+                                           │
+                    ┌──────────────────────┘
+                    │
+        ┌───────────▼──────────┐
+        │  api.sphyre.tech     │
+        │   (Fortro Engine)    │
+        └───────────┬──────────┘
+                    │
+    ┌───────────────┼────────────────┐
+    │               │                │
+┌───▼───┐    ┌─────▼─────┐   ┌─────▼────┐
+│MongoDB│    │IPFS (Kubo)│   │ Ethereum │
+│Database│   │   Node    │   │   Node   │
+└───────┘    └───────────┘   └──────────┘
+```
+
+### API Communication
+
+All frontend applications communicate with Fortro Engine via REST API:
+
+**Base URL:** `https://api.sphyre.tech`
+
+**Authentication:**
+```http
+Authorization: Bearer <JWT_TOKEN>
+X-User-DID: did:alyra:...
+```
+
+**CORS Configuration:**
+- Allowed origins: `app.sphyre.tech`, `issuers.sphyre.tech`, `verifier.sphyre.tech`
+- Methods: GET, POST, PUT, DELETE
+- Headers: Content-Type, Authorization, X-User-DID
+
+## Performance & Scalability
+
+### Optimization Strategies
+
+<AccordionGroup>
+  <Accordion icon="gauge-high" title="API Performance">
+    - Rust's zero-cost abstractions for maximum speed
+    - Async I/O with Tokio runtime
+    - Connection pooling for database and IPFS
+    - Response caching for frequently accessed data
+  </Accordion>
+  
+  <Accordion icon="database" title="Database Optimization">
+    - Indexed queries on DID and credential ID
+    - Aggregation pipelines for analytics
+    - TTL indexes for expired credentials
+    - Sharding for horizontal scaling
+  </Accordion>
+  
+  <Accordion icon="diagram-project" title="Frontend Optimization">
+    - Next.js static generation where possible
+    - Image optimization and lazy loading
+    - Code splitting and tree shaking
+    - Service worker for offline support
+  </Accordion>
+  
+  <Accordion icon="network-wired" title="Network Optimization">
+    - CDN for static assets
+    - Gzip/Brotli compression
+    - HTTP/2 multiplexing
+    - WebSocket for real-time updates
+  </Accordion>
+</AccordionGroup>
+
+## Design Principles
+
+<Steps>
+  <Step title="Decentralization">
+    No single point of failure. Data distributed across IPFS and blockchain.
+  </Step>
+  
+  <Step title="Privacy by Design">
+    Minimal data collection. User controls data sharing. ZKP for selective disclosure.
+  </Step>
+  
+  <Step title="Security First">
+    Post-quantum cryptography. Defense in depth. Regular security audits.
+  </Step>
+  
+  <Step title="Interoperability">
+    W3C standards compliance. OpenAPI specification. RESTful design.
+  </Step>
+  
+  <Step title="User Experience">
+    Simple interfaces. Progressive enhancement. Offline functionality.
+  </Step>
+</Steps>
+
+## Technology Decisions
+
+| Aspect | Technology | Rationale |
+|--------|-----------|-----------|
+| **Backend Language** | Rust | Performance, memory safety, concurrency |
+| **Frontend Framework** | Next.js/React | Developer experience, SEO, SSR/SSG |
+| **Database** | MongoDB | Flexible schema, JSON storage, scalability |
+| **Storage** | IPFS | Decentralized, content-addressed, permanent |
+| **Blockchain** | Ethereum | Mature ecosystem, smart contract support |
+| **Cryptography** | Kyber-Dilithium | Post-quantum resistant, NIST approved |
+| **Authentication** | JWT | Stateless, scalable, widely supported |
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Explore Components"
+    icon="cubes"
+    href="/components/fortro-engine"
+  >
+    Deep dive into each component
+  </Card>
+  
+  <Card
+    title="Developer Setup"
+    icon="code"
+    href="/developer/setup"
+  >
+    Set up local development environment
+  </Card>
+  
+  <Card
+    title="API Reference"
+    icon="book"
+    href="/api-reference/introduction"
+  >
+    Explore API endpoints
+  </Card>
+  
+  <Card
+    title="Core Concepts"
+    icon="lightbulb"
+    href="/concepts/ssi"
+  >
+    Understand SSI fundamentals
+  </Card>
+</CardGroup>

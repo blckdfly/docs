@@ -1,68 +1,105 @@
 {
   "$schema": "https://mintlify.com/docs.json",
   "theme": "mint",
-  "name": "Mint Starter Kit",
+  "name": "Sphyre Documentation",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#6366F1",
+    "light": "#818CF8",
+    "dark": "#4F46E5"
   },
   "favicon": "/favicon.svg",
   "navigation": {
     "tabs": [
       {
-        "tab": "Guides",
+        "tab": "Documentation",
         "groups": [
           {
-            "group": "Getting started",
+            "group": "Getting Started",
             "pages": [
               "index",
               "quickstart",
-              "development"
+              "architecture"
             ]
           },
           {
-            "group": "Customization",
+            "group": "Core Concepts",
             "pages": [
-              "essentials/settings",
-              "essentials/navigation"
+              "concepts/ssi",
+              "concepts/did",
+              "concepts/verifiable-credentials",
+              "concepts/zero-knowledge-proofs"
             ]
           },
           {
-            "group": "Writing content",
+            "group": "Components",
             "pages": [
-              "essentials/markdown",
-              "essentials/code",
-              "essentials/images",
-              "essentials/reusable-snippets"
+              "components/fortro-engine",
+              "components/sphyre-alv",
+              "components/sphyre-issuers",
+              "components/sphyre-verifier"
             ]
           },
           {
-            "group": "AI tools",
+            "group": "User Guides",
             "pages": [
-              "ai-tools/cursor",
-              "ai-tools/claude-code",
-              "ai-tools/windsurf"
+              "guides/wallet-setup",
+              "guides/issuing-credentials",
+              "guides/requesting-credentials",
+              "guides/verifying-credentials",
+              "guides/consent-management"
+            ]
+          },
+          {
+            "group": "Developer Guides",
+            "pages": [
+              "developer/setup",
+              "developer/authentication",
+              "developer/integration",
+              "developer/deployment"
             ]
           }
         ]
       },
       {
-        "tab": "API reference",
+        "tab": "API Reference",
         "groups": [
           {
-            "group": "API documentation",
+            "group": "Overview",
             "pages": [
-              "api-reference/introduction"
+              "api-reference/introduction",
+              "api-reference/authentication"
             ]
           },
           {
-            "group": "Endpoint examples",
+            "group": "Authentication",
             "pages": [
-              "api-reference/endpoint/get",
-              "api-reference/endpoint/create",
-              "api-reference/endpoint/delete",
-              "api-reference/endpoint/webhook"
+              "api-reference/auth/register",
+              "api-reference/auth/login",
+              "api-reference/auth/verify"
+            ]
+          },
+          {
+            "group": "Wallet",
+            "pages": [
+              "api-reference/wallet/get-credentials",
+              "api-reference/wallet/get-connections",
+              "api-reference/wallet/manage-consent"
+            ]
+          },
+          {
+            "group": "Issuer",
+            "pages": [
+              "api-reference/issuer/create-schema",
+              "api-reference/issuer/issue-credential",
+              "api-reference/issuer/revoke-credential"
+            ]
+          },
+          {
+            "group": "Verifier",
+            "pages": [
+              "api-reference/verifier/create-request",
+              "api-reference/verifier/verify-presentation",
+              "api-reference/verifier/get-verifications"
             ]
           }
         ]
@@ -71,14 +108,14 @@
     "global": {
       "anchors": [
         {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
+          "anchor": "GitHub",
+          "href": "https://github.com/sphyre",
+          "icon": "github"
         },
         {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
+          "anchor": "Community",
+          "href": "https://discord.gg/sphyre",
+          "icon": "discord"
         }
       ]
     }
@@ -91,13 +128,13 @@
     "links": [
       {
         "label": "Support",
-        "href": "mailto:hi@mintlify.com"
+        "href": "mailto:support@sphyre.tech"
       }
     ],
     "primary": {
       "type": "button",
-      "label": "Dashboard",
-      "href": "https://dashboard.mintlify.com"
+      "label": "Live Demo",
+      "href": "https://app.sphyre.tech"
     }
   },
   "contextual": {
@@ -114,9 +151,8 @@
   },
   "footer": {
     "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
+      "github": "https://github.com/sphyre",
+      "linkedin": "https://linkedin.com/company/sphyre"
     }
   }
 }

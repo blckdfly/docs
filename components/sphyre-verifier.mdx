@@ -1,0 +1,839 @@
+---
+title: "Sphyre Verifier"
+description: "Verification portal for requesting and validating credentials"
+---
+
+# Sphyre Verifier
+
+Sphyre Verifier is the web application designed for organizations to request, receive, and verify credentials from users. It enables privacy-preserving verification with support for selective disclosure and zero-knowledge proofs.
+
+## Overview
+
+**Sphyre Verifier** allows organizations to verify user credentials without storing unnecessary personal data, supporting compliance with privacy regulations like GDPR.
+
+<CardGroup cols={2}>
+  <Card title="Technology" icon="code">
+    **Framework:** Next.js 14  
+    **Language:** TypeScript  
+    **URL:** `https://verifier.sphyre.tech`
+  </Card>
+  
+  <Card title="Key Features" icon="star">
+    Presentation requests  
+    Instant verification  
+    Zero-knowledge proofs  
+    Verification history
+  </Card>
+</CardGroup>
+
+## Key Features
+
+<AccordionGroup>
+  <Accordion icon="file-contract" title="Presentation Requests">
+    - Create custom verification requests
+    - Specify required credentials and claims
+    - Support for zero-knowledge predicates
+    - QR code generation for easy scanning
+    - Expiring request links
+  </Accordion>
+  
+  <Accordion icon="shield-check" title="Credential Verification">
+    - Instant cryptographic verification
+    - Blockchain anchor validation
+    - Revocation status checking
+    - Issuer trust verification
+    - Multi-credential validation
+  </Accordion>
+  
+  <Accordion icon="eye-slash" title="Privacy-Preserving">
+    - Selective disclosure support
+    - Zero-knowledge proof verification
+    - Minimal data collection
+    - No personal data storage
+    - GDPR compliant by design
+  </Accordion>
+  
+  <Accordion icon="clock" title="Verification History">
+    - Track all verifications
+    - Export verification records
+    - Audit trail
+    - Search and filter
+    - Compliance reporting
+  </Accordion>
+  
+  <Accordion icon="handshake" title="Consent Management">
+    - User consent tracking
+    - Purpose specification
+    - Data usage transparency
+    - Consent revocation handling
+  </Accordion>
+</AccordionGroup>
+
+## Application Structure
+
+```
+sphyre-verifier/
+├── src/
+│   ├── app/
+│   │   ├── Dashboard/           # Main dashboard
+│   │   ├── CreateRequest/       # New verification request
+│   │   ├── Presentation/        # View presentations
+│   │   ├── Verifications/       # History
+│   │   ├── Settings/            # Configuration
+│   │   └── TrustRegistry/       # Trusted issuers
+│   ├── components/
+│   │   ├── RequestBuilder.tsx   # Build verification requests
+│   │   ├── QRDisplay.tsx        # Display QR codes
+│   │   ├── PresentationViewer.tsx  # View submissions
+│   │   ├── VerificationResult.tsx  # Show results
+│   │   └── TrustBadge.tsx       # Issuer trust indicator
+│   ├── services/
+│   │   ├── apiService.ts        # API client
+│   │   ├── verificationService.ts  # Verification logic
+│   │   └── zkpService.ts        # ZKP validation
+│   └── types/
+│       └── verification.ts      # TypeScript definitions
+└── package.json
+```
+
+## Core Workflows
+
+### 1. Create Presentation Request
+
+Build a verification request specifying what credentials to request.
+
+**Request Builder Interface:**
+```typescript
+interface PresentationRequest {
+  id: string;
+  verifierId: string;
+  verifierName: string;
+  purpose: string;
+  requiredCredentials: CredentialRequirement[];
+  optionalCredentials?: CredentialRequirement[];
+  expiresAt: Date;
+  challenge: string;
+}
+
+interface CredentialRequirement {
+  schemaId: string;
+  issuerDids?: string[];  // Trusted issuers
+  fields?: string[];      // Specific claims needed
+  predicates?: Predicate[]; // For ZKP
+}
+
+interface Predicate {
+  field: string;
+  type: 'greaterThan' | 'lessThan' | 'equals' | 'memberOf';
+  value: any;
+}
+```
+
+**Request Builder Component:**
+```tsx
+const CreateRequest = () => {
+  const [request, setRequest] = useState({
+    purpose: '',
+    requiredCredentials: [],
+    expiresIn: 3600 // 1 hour
+  });
+  
+  const [useZKP, setUseZKP] = useState(false);
+  
+  const addCredentialRequirement = () => {
+    setRequest({
+      ...request,
+      requiredCredentials: [
+        ...request.requiredCredentials,
+        { schemaId: '', fields: [] }
+      ]
+    });
+  };
+  
+  const createRequest = async () => {
+    try {
+      const response = await apiService.createPresentationRequest({
+        ...request,
+        verifierId: getVerifierDid(),
+        verifierName: getVerifierName(),
+        expiresAt: new Date(Date.now() + request.expiresIn * 1000)
+      });
+      
+      // Generate QR code
+      const qrCode = await generateQRCode({
+        type: 'PresentationRequest',
+        requestId: response.id,
+        url: `${window.location.origin}/submit/${response.id}`
+      });
+      
+      setQRCode(qrCode);
+      toast.success('Verification request created!');
+      
+    } catch (error) {
+      toast.error('Failed to create request');
+    }
+  };
+  
+  return (
+    <div className="create-request">
+      <Input
+        label="Verification Purpose"
+        value={request.purpose}
+        onChange={(e) => setRequest({ ...request, purpose: e.target.value })}
+        placeholder="e.g., Age verification for entry"
+      />
+      
+      <div className="credentials-section">
+        <h3>Required Credentials</h3>
+        {request.requiredCredentials.map((req, index) => (
+          <CredentialRequirementEditor
+            key={index}
+            requirement={req}
+            onChange={(updated) => updateRequirement(index, updated)}
+            useZKP={useZKP}
+          />
+        ))}
+        <Button onClick={addCredentialRequirement}>
+          Add Requirement
+        </Button>
+      </div>
+      
+      <Toggle
+        label="Use Zero-Knowledge Proofs"
+        checked={useZKP}
+        onChange={setUseZKP}
+      />
+      
+      <Select
+        label="Request Expires In"
+        value={request.expiresIn}
+        onChange={(val) => setRequest({ ...request, expiresIn: val })}
+        options={[
+          { value: 300, label: '5 minutes' },
+          { value: 3600, label: '1 hour' },
+          { value: 86400, label: '24 hours' }
+        ]}
+      />
+      
+      <Button onClick={createRequest} variant="primary">
+        Create Request & Generate QR
+      </Button>
+    </div>
+  );
+};
+```
+
+### 2. QR Code Display
+
+Show QR code for users to scan with their wallet.
+
+```tsx
+import QRCode from 'qrcode.react';
+
+const QRDisplay = ({ requestId, requestUrl }) => {
+  const [copied, setCopied] = useState(false);
+  
+  const qrData = JSON.stringify({
+    type: 'PresentationRequest',
+    requestId,
+    url: requestUrl
+  });
+  
+  const copyLink = () => {
+    navigator.clipboard.writeText(requestUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+  
+  return (
+    <div className="qr-display">
+      <div className="qr-code-container">
+        <QRCode
+          value={qrData}
+          size={300}
+          level="H"
+          includeMargin={true}
+        />
+      </div>
+      
+      <div className="instructions">
+        <p>Scan this QR code with Sphyre ALV wallet</p>
+        <p className="text-sm text-gray-600">
+          Or share the link below
+        </p>
+      </div>
+      
+      <div className="link-section">
+        <Input
+          value={requestUrl}
+          readOnly
+          onClick={(e) => e.target.select()}
+        />
+        <Button onClick={copyLink}>
+          {copied ? 'Copied!' : 'Copy Link'}
+        </Button>
+      </div>
+      
+      <div className="waiting-state">
+        <Spinner />
+        <p>Waiting for user response...</p>
+      </div>
+    </div>
+  );
+};
+```
+
+### 3. Receive and Verify Presentation
+
+Process submitted presentations from users.
+
+```tsx
+const PresentationPage = () => {
+  const [presentations, setPresentations] = useState([]);
+  const [selectedPresentation, setSelectedPresentation] = useState(null);
+  
+  useEffect(() => {
+    fetchPresentations();
+    
+    // Set up polling for new presentations
+    const interval = setInterval(fetchPresentations, 5000);
+    return () => clearInterval(interval);
+  }, []);
+  
+  const fetchPresentations = async () => {
+    const data = await apiService.getPresentations(getVerifierDid());
+    setPresentations(data);
+  };
+  
+  const verifyPresentation = async (presentation) => {
+    setVerifying(true);
+    
+    try {
+      const result = await apiService.verifyPresentation(presentation.id);
+      
+      setVerificationResult(result);
+      
+      if (result.valid) {
+        toast.success('Verification successful!');
+      } else {
+        toast.error('Verification failed');
+      }
+      
+    } catch (error) {
+      toast.error('Verification error');
+    } finally {
+      setVerifying(false);
+    }
+  };
+  
+  return (
+    <div className="presentation-page">
+      <div className="presentations-list">
+        <h2>Received Presentations</h2>
+        {presentations.map(pres => (
+          <PresentationCard
+            key={pres.id}
+            presentation={pres}
+            onClick={() => setSelectedPresentation(pres)}
+          />
+        ))}
+      </div>
+      
+      {selectedPresentation && (
+        <PresentationModal
+          presentation={selectedPresentation}
+          onVerify={verifyPresentation}
+          onClose={() => setSelectedPresentation(null)}
+        />
+      )}
+    </div>
+  );
+};
+```
+
+### 4. Verification Logic
+
+Cryptographically verify credentials.
+
+```typescript
+class VerificationService {
+  async verifyPresentation(presentation: VerifiablePresentation): Promise<VerificationResult> {
+    const results = [];
+    
+    // 1. Verify holder's signature on presentation
+    const holderSignatureValid = await this.verifyHolderSignature(presentation);
+    
+    if (!holderSignatureValid) {
+      return {
+        valid: false,
+        error: 'Invalid holder signature'
+      };
+    }
+    
+    // 2. Verify each credential
+    for (const credential of presentation.verifiableCredential) {
+      const credentialResult = await this.verifyCredential(credential);
+      results.push(credentialResult);
+    }
+    
+    // 3. Check if all credentials are valid
+    const allValid = results.every(r => r.valid);
+    
+    return {
+      valid: allValid,
+      credentials: results,
+      verifiedClaims: this.extractVerifiedClaims(results),
+      timestamp: new Date()
+    };
+  }
+  
+  async verifyCredential(credential: VerifiableCredential): Promise<CredentialVerificationResult> {
+    // 1. Resolve issuer DID to get public key
+    const issuerDID = credential.issuer;
+    const didDocument = await this.resolveDID(issuerDID);
+    const publicKey = didDocument.verificationMethod[0].publicKeyBase64;
+    
+    // 2. Verify issuer's signature
+    const signatureValid = await this.verifyIssuerSignature(
+      credential,
+      publicKey
+    );
+    
+    // 3. Check blockchain anchor
+    const anchorValid = await this.verifyBlockchainAnchor(
+      credential.ipfsHash
+    );
+    
+    // 4. Check revocation status
+    const isRevoked = await this.checkRevocationStatus(credential.id);
+    
+    // 5. Check expiration
+    const isExpired = credential.expirationDate && 
+      new Date(credential.expirationDate) < new Date();
+    
+    // 6. Verify issuer is trusted
+    const issuerTrusted = await this.isIssuerTrusted(issuerDID);
+    
+    return {
+      valid: signatureValid && anchorValid && !isRevoked && !isExpired && issuerTrusted,
+      checks: {
+        signature: signatureValid,
+        anchor: anchorValid,
+        revoked: !isRevoked,
+        expired: !isExpired,
+        trustedIssuer: issuerTrusted
+      },
+      credential
+    };
+  }
+  
+  async verifyIssuerSignature(
+    credential: VerifiableCredential,
+    publicKey: string
+  ): Promise<boolean> {
+    // Extract credential without proof
+    const { proof, ...credentialData } = credential;
+    
+    // Verify signature using public key
+    return verifyDilithiumSignature(
+      JSON.stringify(credentialData),
+      proof.signature,
+      publicKey
+    );
+  }
+  
+  async verifyBlockchainAnchor(ipfsHash: string): Promise<boolean> {
+    const contract = getBlockchainContract();
+    return await contract.verifyAnchor(ipfsHash);
+  }
+  
+  async checkRevocationStatus(credentialId: string): Promise<boolean> {
+    const contract = getBlockchainContract();
+    return await contract.isRevoked(credentialId);
+  }
+}
+```
+
+### 5. Verification Result Display
+
+Show verification results to the verifier.
+
+```tsx
+const VerificationResult = ({ result }: { result: VerificationResult }) => {
+  return (
+    <div className="verification-result">
+      <div className={`result-header ${result.valid ? 'success' : 'error'}`}>
+        {result.valid ? (
+          <>
+            <CheckCircle size={48} />
+            <h2>Verification Successful</h2>
+          </>
+        ) : (
+          <>
+            <XCircle size={48} />
+            <h2>Verification Failed</h2>
+          </>
+        )}
+      </div>
+      
+      {result.valid && (
+        <div className="verified-claims">
+          <h3>Verified Information</h3>
+          {Object.entries(result.verifiedClaims).map(([key, value]) => (
+            <div key={key} className="claim-row">
+              <span className="claim-label">{formatLabel(key)}:</span>
+              <span className="claim-value">{value}</span>
+              <CheckCircle size={16} className="text-green-500" />
+            </div>
+          ))}
+        </div>
+      )}
+      
+      <div className="verification-details">
+        <h3>Verification Details</h3>
+        {result.credentials?.map((cred, index) => (
+          <CredentialCheckResult key={index} credential={cred} />
+        ))}
+      </div>
+      
+      <div className="actions">
+        <Button onClick={() => downloadReport(result)}>
+          Download Report
+        </Button>
+        <Button variant="outline" onClick={() => saveVerification(result)}>
+          Save Verification
+        </Button>
+      </div>
+    </div>
+  );
+};
+
+const CredentialCheckResult = ({ credential }) => {
+  const checks = credential.checks;
+  
+  return (
+    <div className="credential-check">
+      <h4>{credential.credential.type[1]}</h4>
+      <div className="checks-list">
+        <CheckItem 
+          label="Signature Valid" 
+          status={checks.signature} 
+        />
+        <CheckItem 
+          label="Blockchain Anchor" 
+          status={checks.anchor} 
+        />
+        <CheckItem 
+          label="Not Revoked" 
+          status={checks.revoked} 
+        />
+        <CheckItem 
+          label="Not Expired" 
+          status={checks.expired} 
+        />
+        <CheckItem 
+          label="Trusted Issuer" 
+          status={checks.trustedIssuer} 
+        />
+      </div>
+    </div>
+  );
+};
+```
+
+### 6. Zero-Knowledge Proof Verification
+
+Verify ZKP presentations without seeing raw data.
+
+```tsx
+const ZKPVerification = ({ presentation }: { presentation: ZKProof }) => {
+  const [verifying, setVerifying] = useState(false);
+  const [result, setResult] = useState(null);
+  
+  const verifyZKP = async () => {
+    setVerifying(true);
+    
+    try {
+      // Verify the zero-knowledge proof
+      const isValid = await zkpService.verify({
+        proof: presentation.proof,
+        statement: presentation.statement,
+        publicInput: presentation.publicInput,
+        commitment: presentation.commitment
+      });
+      
+      // Verify credential is valid (not revoked)
+      const credentialValid = await verifyCredentialValidity(
+        presentation.credentialId,
+        presentation.issuerDid
+      );
+      
+      setResult({
+        valid: isValid && credentialValid,
+        statement: presentation.statement,
+        proofType: presentation.proofType
+      });
+      
+    } catch (error) {
+      setResult({ valid: false, error: error.message });
+    } finally {
+      setVerifying(false);
+    }
+  };
+  
+  return (
+    <div className="zkp-verification">
+      <div className="statement-display">
+        <h3>Statement to Verify:</h3>
+        <p className="statement">{presentation.statement}</p>
+      </div>
+      
+      <div className="proof-info">
+        <InfoRow label="Proof Type" value={presentation.proofType} />
+        <InfoRow label="Issuer" value={truncateDid(presentation.issuerDid)} />
+      </div>
+      
+      <Button onClick={verifyZKP} disabled={verifying}>
+        {verifying ? 'Verifying...' : 'Verify Proof'}
+      </Button>
+      
+      {result && (
+        <div className={`result ${result.valid ? 'valid' : 'invalid'}`}>
+          {result.valid ? (
+            <>
+              <CheckCircle />
+              <p>Statement proven: <strong>{result.statement}</strong></p>
+              <p className="note">No personal data was revealed</p>
+            </>
+          ) : (
+            <>
+              <XCircle />
+              <p>Proof verification failed</p>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+```
+
+## Verification History
+
+Track all verifications for audit and compliance.
+
+```tsx
+const VerificationHistory = () => {
+  const [verifications, setVerifications] = useState([]);
+  const [filter, setFilter] = useState({
+    dateFrom: null,
+    dateTo: null,
+    status: 'all'
+  });
+  
+  const exportVerifications = () => {
+    const csv = convertToCSV(verifications);
+    downloadCSV(csv, 'verifications.csv');
+  };
+  
+  return (
+    <div className="verification-history">
+      <div className="header">
+        <h1>Verification History</h1>
+        <Button onClick={exportVerifications}>
+          Export Report
+        </Button>
+      </div>
+      
+      <FilterPanel filter={filter} onChange={setFilter} />
+      
+      <Table>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Holder DID</th>
+            <th>Credential Type</th>
+            <th>Result</th>
+            <th>Purpose</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {verifications.map(ver => (
+            <tr key={ver.id}>
+              <td>{formatDateTime(ver.timestamp)}</td>
+              <td>{truncateDid(ver.holderDid)}</td>
+              <td>{ver.credentialType}</td>
+              <td>
+                <Badge status={ver.valid ? 'success' : 'error'}>
+                  {ver.valid ? 'Valid' : 'Invalid'}
+                </Badge>
+              </td>
+              <td>{ver.purpose}</td>
+              <td>
+                <Button size="sm" onClick={() => viewDetails(ver)}>
+                  View
+                </Button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </Table>
+    </div>
+  );
+};
+```
+
+## Trust Registry
+
+Manage trusted credential issuers.
+
+```tsx
+const TrustRegistry = () => {
+  const [trustedIssuers, setTrustedIssuers] = useState([]);
+  const [newIssuerDid, setNewIssuerDid] = useState('');
+  
+  const addTrustedIssuer = async () => {
+    await apiService.addTrustedIssuer({
+      verifierId: getVerifierDid(),
+      issuerDid: newIssuerDid
+    });
+    
+    toast.success('Issuer added to trust registry');
+    fetchTrustedIssuers();
+    setNewIssuerDid('');
+  };
+  
+  const removeTrustedIssuer = async (issuerDid) => {
+    await apiService.removeTrustedIssuer(issuerDid);
+    toast.info('Issuer removed from trust registry');
+    fetchTrustedIssuers();
+  };
+  
+  return (
+    <div className="trust-registry">
+      <h1>Trusted Issuers</h1>
+      
+      <div className="add-issuer">
+        <Input
+          placeholder="Enter issuer DID"
+          value={newIssuerDid}
+          onChange={(e) => setNewIssuerDid(e.target.value)}
+        />
+        <Button onClick={addTrustedIssuer}>Add Issuer</Button>
+      </div>
+      
+      <div className="issuers-list">
+        {trustedIssuers.map(issuer => (
+          <IssuerCard
+            key={issuer.did}
+            issuer={issuer}
+            onRemove={() => removeTrustedIssuer(issuer.did)}
+          />
+        ))}
+      </div>
+    </div>
+  );
+};
+```
+
+## API Integration
+
+```typescript
+class VerifierApiService {
+  baseURL = 'https://api.sphyre.tech';
+  
+  async createPresentationRequest(request: PresentationRequest) {
+    return await this.post('/api/verifier/request', request);
+  }
+  
+  async getPresentations(verifierId: string) {
+    return await this.get(`/api/verifier/presentations?verifier=${verifierId}`);
+  }
+  
+  async verifyPresentation(presentationId: string) {
+    return await this.post(`/api/verifier/verify/${presentationId}`);
+  }
+  
+  async getVerificationHistory(verifierId: string, filters?: any) {
+    const params = new URLSearchParams(filters);
+    return await this.get(`/api/verifier/history?${params}`);
+  }
+  
+  async addTrustedIssuer(data: { verifierId: string, issuerDid: string }) {
+    return await this.post('/api/verifier/trust', data);
+  }
+}
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion icon="shield-check" title="Security">
+    - Always verify blockchain anchors
+    - Check revocation status
+    - Validate issuer trust
+    - Use HTTPS only
+    - Implement rate limiting
+  </Accordion>
+  
+  <Accordion icon="eye-slash" title="Privacy">
+    - Request only necessary data
+    - Use ZKP when possible
+    - Don't store personal data
+    - Clear purpose statements
+    - Respect user consent
+  </Accordion>
+  
+  <Accordion icon="gavel" title="Compliance">
+    - GDPR compliance
+    - Audit trail maintenance
+    - Data retention policies
+    - User rights support
+    - Regular compliance reviews
+  </Accordion>
+  
+  <Accordion icon="users" title="User Experience">
+    - Clear instructions
+    - Fast verification
+    - Mobile-friendly
+    - Error handling
+    - Accessibility
+  </Accordion>
+</AccordionGroup>
+
+## Resources
+
+<CardGroup cols={2}>
+  <Card
+    title="Verification Guide"
+    icon="book"
+    href="/guides/verifying-credentials"
+  >
+    Complete verification tutorial
+  </Card>
+  
+  <Card
+    title="API Reference"
+    icon="code"
+    href="/api-reference/verifier/verify-presentation"
+  >
+    Verifier API documentation
+  </Card>
+  
+  <Card
+    title="Live Demo"
+    icon="globe"
+    href="https://verifier.sphyre.tech"
+  >
+    Try Sphyre Verifier
+  </Card>
+  
+  <Card
+    title="GitHub"
+    icon="github"
+    href="https://github.com/sphyre/sphyre-verifier"
+  >
+    Source code
+  </Card>
+</CardGroup>

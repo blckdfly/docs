@@ -1,97 +1,150 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: "Welcome to Sphyre"
+description: "A decentralized Self-Sovereign Identity (SSI) ecosystem built with post-quantum cryptography"
 ---
 
-## Setting up
+# Introduction
 
-Get your documentation site up and running in minutes.
+Sphyre is a comprehensive Self-Sovereign Identity (SSI) platform that empowers users with complete control over their digital identities and credentials. Built on cutting-edge blockchain and cryptographic technologies, Sphyre provides a secure, privacy-preserving solution for identity management.
 
 <Card
-  title="Start here"
+  title="Get Started in 5 Minutes"
   icon="rocket"
   href="/quickstart"
   horizontal
 >
-  Follow our three step quickstart guide.
+  Jump right in and set up your first wallet and credential
 </Card>
 
-## Make it yours
+## Key Features
 
-Design a docs site that looks great and empowers your users.
+<CardGroup cols={2}>
+  <Card
+    title="Self-Sovereign Identity"
+    icon="fingerprint"
+    href="/concepts/ssi"
+  >
+    Users own and control their identity data without relying on centralized authorities
+  </Card>
+  <Card
+    title="Verifiable Credentials"
+    icon="certificate"
+    href="/concepts/verifiable-credentials"
+  >
+    Issue, store, and verify tamper-proof digital credentials
+  </Card>
+  <Card
+    title="Zero-Knowledge Proofs"
+    icon="shield-halved"
+    href="/concepts/zero-knowledge-proofs"
+  >
+    Prove facts about your credentials without revealing unnecessary information
+  </Card>
+  <Card
+    title="Post-Quantum Cryptography"
+    icon="atom"
+    href="/concepts/did"
+  >
+    Future-proof security using Kyber-Dilithium cryptographic algorithms
+  </Card>
+</CardGroup>
 
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
-  </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
-  </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
-  </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
-  </Card>
-</Columns>
+## Ecosystem Components
 
-## Create beautiful pages
+Sphyre consists of four integrated applications that work together to provide a complete SSI solution:
 
-Everything you need to create world-class documentation.
+<CardGroup cols={2}>
+  <Card
+    title="Fortro Engine"
+    icon="server"
+    href="/components/fortro-engine"
+  >
+    Rust-based backend API with blockchain, IPFS, and MongoDB integration
+  </Card>
+  <Card
+    title="Sphyre ALV"
+    icon="wallet"
+    href="/components/sphyre-alv"
+  >
+    User wallet app for managing credentials and digital identity
+  </Card>
+  <Card
+    title="Sphyre Issuers"
+    icon="building"
+    href="/components/sphyre-issuers"
+  >
+    Organization dashboard for issuing and managing credentials
+  </Card>
+  <Card
+    title="Sphyre Verifier"
+    icon="check-circle"
+    href="/components/sphyre-verifier"
+  >
+    Verification portal for requesting and validating credentials
+  </Card>
+</CardGroup>
 
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
+## Common Use Cases
 
-## Need inspiration?
+<AccordionGroup>
+  <Accordion icon="id-card" title="Digital Identity Verification">
+    Replace physical IDs with verifiable digital credentials. Institutions can issue digital IDs, driver's licenses, and other identity documents that users can store in their wallet and present when needed.
+  </Accordion>
+  <Accordion icon="graduation-cap" title="Educational Credentials">
+    Universities and educational institutions can issue tamper-proof diplomas, certificates, and transcripts that students own and can share with employers or other institutions.
+  </Accordion>
+  <Accordion icon="briefcase" title="Professional Certifications">
+    Professional organizations can issue certifications and licenses that practitioners can present to clients or employers, with instant verification capabilities.
+  </Accordion>
+  <Accordion icon="shield-check" title="Access Control">
+    Organizations can verify credentials for access control without storing personal data, using zero-knowledge proofs to validate eligibility without revealing unnecessary information.
+  </Accordion>
+</AccordionGroup>
+
+## Why Sphyre?
+
+<CardGroup cols={3}>
+  <Card title="Privacy-First" icon="lock">
+    Selective disclosure and zero-knowledge proofs ensure you only share what's necessary
+  </Card>
+  <Card title="Decentralized" icon="network-wired">
+    No central authority controls your identity. Data is stored on IPFS and anchored on blockchain
+  </Card>
+  <Card title="Interoperable" icon="arrows-spin">
+    Built on W3C standards for DIDs and Verifiable Credentials
+  </Card>
+  <Card title="Secure" icon="shield">
+    Post-quantum cryptography protects against future threats
+  </Card>
+  <Card title="User-Friendly" icon="heart">
+    Intuitive interfaces make advanced cryptography accessible to everyone
+  </Card>
+  <Card title="Open Source" icon="code-branch">
+    Transparent, auditable, and community-driven development
+  </Card>
+</CardGroup>
+
+## Next Steps
+
+<Steps>
+  <Step title="Learn the Basics">
+    Understand [SSI concepts](/concepts/ssi) and [how DIDs work](/concepts/did)
+  </Step>
+  <Step title="Set Up Your Wallet">
+    Follow our [quickstart guide](/quickstart) to create your first wallet
+  </Step>
+  <Step title="Explore Components">
+    Learn about each [component](/components/fortro-engine) in the ecosystem
+  </Step>
+  <Step title="Build with Sphyre">
+    Check out our [developer guides](/developer/setup) to integrate Sphyre
+  </Step>
+</Steps>
 
 <Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
+  title="Ready to dive in?"
+  icon="arrow-right"
+  href="/quickstart"
 >
-  Browse our showcase of exceptional documentation sites.
+  Start with our quickstart guide
 </Card>

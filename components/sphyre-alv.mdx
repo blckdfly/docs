@@ -1,0 +1,769 @@
+---
+title: "Sphyre ALV"
+description: "User wallet application for managing digital identity and credentials"
+---
+
+# Sphyre ALV
+
+Sphyre ALV is a Progressive Web App (PWA) that serves as the user's digital wallet for managing their self-sovereign identity, credentials, and connections. Built with Next.js, it provides an intuitive interface for all SSI operations.
+
+## Overview
+
+**Sphyre ALV** (Autonomous Ledger Vault) is where users store and manage their digital identity, credentials, and consent preferences.
+
+<CardGroup cols={2}>
+  <Card title="Technology" icon="code">
+    **Framework:** Next.js 14  
+    **Language:** TypeScript  
+    **URL:** `https://app.sphyre.tech`
+  </Card>
+  
+  <Card title="Key Features" icon="star">
+    Seed phrase wallet  
+    Credential management  
+    QR code scanning  
+    Zero-knowledge proofs
+  </Card>
+</CardGroup>
+
+## Key Features
+
+<AccordionGroup>
+  <Accordion icon="wallet" title="Digital Wallet">
+    - 12-word BIP39 seed phrase generation
+    - DID creation and management (`did:alyra` format)
+    - Encrypted backup with password protection
+    - Biometric authentication support (WebAuthn)
+    - Multi-device sync capability
+  </Accordion>
+  
+  <Accordion icon="certificate" title="Credential Management">
+    - Store unlimited verifiable credentials
+    - Credential slider for quick access
+    - Detailed credential viewer
+    - Selective disclosure controls
+    - Credential expiration tracking
+    - QR code generation for sharing
+  </Accordion>
+  
+  <Accordion icon="qrcode" title="QR Code Scanning">
+    - Scan credential offers from issuers
+    - Scan presentation requests from verifiers
+    - Generate QR codes for credential sharing
+    - Type detection and routing
+  </Accordion>
+  
+  <Accordion icon="shield-halved" title="Privacy Controls">
+    - Zero-knowledge proof generation
+    - Selective disclosure settings
+    - Consent management dashboard
+    - Connection tracking
+    - Data sharing preferences
+  </Accordion>
+  
+  <Accordion icon="users" title="Connections">
+    - Track issuers and verifiers
+    - Manage trusted organizations
+    - View interaction history
+    - Revoke access anytime
+  </Accordion>
+</AccordionGroup>
+
+## Application Structure
+
+```
+sphyre-alv/
+├── src/
+│   ├── app/
+│   │   ├── onboarding/          # Wallet creation
+│   │   ├── recovery/            # Seed phrase recovery
+│   │   ├── SSIWalletIdentity/   # Main dashboard
+│   │   ├── RequestCredential/   # Request flow
+│   │   ├── CollectCredentials/  # Receive credentials
+│   │   ├── CredentialRequest/   # Present credentials
+│   │   ├── Settings/            # User preferences
+│   │   └── Connections/         # Manage connections
+│   ├── components/
+│   │   ├── ui/                  # Reusable UI components
+│   │   ├── ProfileBar.tsx       # DID display
+│   │   ├── CredentialCard.tsx   # Credential display
+│   │   └── LoadingScreen.tsx    # Loading states
+│   ├── lib/
+│   │   ├── crypto/              # Cryptographic utilities
+│   │   └── utils.ts             # Helper functions
+│   ├── services/
+│   │   ├── apiService.ts        # API client
+│   │   ├── walletService.ts     # Wallet operations
+│   │   └── zkpService.ts        # ZKP generation
+│   └── types/
+│       └── credentials.ts       # TypeScript definitions
+├── public/
+│   ├── manifest.json            # PWA manifest
+│   └── sw.js                    # Service worker
+└── package.json
+```
+
+## Core Pages
+
+### 1. Onboarding Page
+
+First-time wallet setup with seed phrase generation.
+
+**Features:**
+- Create new wallet or recover existing
+- 12-word seed phrase generation (BIP39)
+- DID generation from public key
+- Seed phrase verification (3 random words)
+- Optional encrypted backup
+- Biometric setup
+
+**Flow:**
+```typescript
+// Wallet creation
+const createWallet = async () => {
+  // Generate seed phrase
+  const mnemonic = generateMnemonic(128); // 12 words
+  
+  // Derive key pair
+  const seed = mnemonicToSeedSync(mnemonic);
+  const keyPair = nacl.sign.keyPair.fromSeed(seed.slice(0, 32));
+  
+  // Create DID
+  const did = `did:alyra:${base64Encode(keyPair.publicKey)}`;
+  
+  // Store in localStorage (encrypted)
+  await storeWallet({ did, keyPair, mnemonic });
+  
+  return { did, mnemonic };
+};
+```
+
+### 2. SSI Wallet Identity (Dashboard)
+
+Main dashboard showing credentials and identity information.
+
+**Components:**
+- **Profile Bar:** Shows user's DID with copy functionality
+- **Credential Slider:** Top 3 credentials for quick access
+- **Credential List:** All credentials with search/filter
+- **Quick Actions:** Request, scan QR, settings
+
+**Real-time Data:**
+```typescript
+const SSIWalletIdentity = () => {
+  const [credentials, setCredentials] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const userDID = getUserDID();
+  
+  useEffect(() => {
+    const fetchCredentials = async () => {
+      try {
+        const response = await apiService.getCredentials(userDID);
+        setCredentials(response.data);
+      } catch (error) {
+        // Fallback to sample data if offline
+        setCredentials(sampleCredentials);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchCredentials();
+  }, [userDID]);
+  
+  return (
+    <div>
+      <ProfileBar did={userDID} />
+      <CredentialSlider credentials={credentials.slice(0, 3)} />
+      <CredentialList credentials={credentials} />
+    </div>
+  );
+};
+```
+
+### 3. Request Credential Page
+
+Multi-step flow for requesting credentials from issuers.
+
+**Steps:**
+1. **Select Schema:** Choose credential type
+2. **Select Template:** Pick issuer's template
+3. **Fill Form:** Enter credential data
+4. **Review:** Confirm before submission
+
+**Available Schemas:**
+- National ID
+- Driver's License
+- Student ID
+- Employee Badge
+- Professional License
+- Health Insurance Card
+
+**Implementation:**
+```typescript
+const RequestCredential = () => {
+  const [step, setStep] = useState(1);
+  const [schema, setSchema] = useState(null);
+  const [template, setTemplate] = useState(null);
+  const [formData, setFormData] = useState({});
+  
+  const submitRequest = async () => {
+    const request = {
+      schemaId: schema.id,
+      templateId: template.id,
+      holderDid: getUserDID(),
+      claims: formData
+    };
+    
+    await apiService.submitCredentialRequest(request);
+    router.push('/SSIWalletIdentity');
+  };
+  
+  return (
+    <MultiStepForm
+      steps={[
+        <SchemaSelection onSelect={setSchema} />,
+        <TemplateSelection schema={schema} onSelect={setTemplate} />,
+        <CredentialForm schema={schema} onChange={setFormData} />,
+        <ReviewStep data={formData} onSubmit={submitRequest} />
+      ]}
+      currentStep={step}
+    />
+  );
+};
+```
+
+### 4. Collect Credentials Page
+
+Receive credentials from QR code scans or offers.
+
+**Process:**
+1. Scan QR code from issuer
+2. Review credential offer
+3. Accept or decline
+4. Credential stored in wallet
+
+```typescript
+const CollectCredentials = () => {
+  const [offer, setOffer] = useState(null);
+  
+  const handleQRScan = async (qrData) => {
+    const parsed = JSON.parse(qrData);
+    
+    if (parsed.type === 'CredentialOffer') {
+      setOffer(parsed);
+    }
+  };
+  
+  const acceptOffer = async () => {
+    const credential = await apiService.acceptCredentialOffer(
+      offer.offerId,
+      getUserDID()
+    );
+    
+    // Store credential
+    await storeCredential(credential);
+    toast.success('Credential received!');
+  };
+  
+  return (
+    <div>
+      <QRScanner onScan={handleQRScan} />
+      {offer && (
+        <CredentialOfferModal
+          offer={offer}
+          onAccept={acceptOffer}
+          onDecline={()=> setOffer(null)}
+        />
+      )}
+    </div>
+  );
+};
+```
+
+### 5. Credential Request (Present)
+
+Present credentials to verifiers with selective disclosure.
+
+**Features:**
+- View presentation request details
+- Select which claims to share
+- Generate zero-knowledge proofs
+- Approve or deny request
+
+**Selective Disclosure:**
+```typescript
+const CredentialRequest = () => {
+  const [request, setRequest] = useState(null);
+  const [selectedClaims, setSelectedClaims] = useState([]);
+  const [useZKP, setUseZKP] = useState(false);
+  
+  const submitPresentation = async () => {
+    let presentation;
+    
+    if (useZKP) {
+      // Generate zero-knowledge proof
+      presentation = await zkpService.generateProof({
+        credential: selectedCredential,
+        predicates: request.predicates
+      });
+    } else {
+      // Selective disclosure
+      presentation = {
+        credential: filterClaims(selectedCredential, selectedClaims),
+        holder: getUserDID()
+      };
+    }
+    
+    // Sign presentation
+    const signature = await signPresentation(presentation);
+    presentation.proof = signature;
+    
+    // Submit to verifier
+    await apiService.submitPresentation(request.id, presentation);
+    toast.success('Credential presented!');
+  };
+  
+  return (
+    <div>
+      <RequestDetails request={request} />
+      <ClaimSelector
+        credential={selectedCredential}
+        onSelect={setSelectedClaims}
+      />
+      <ZKPToggle checked={useZKP} onChange={setUseZKP} />
+      <Button onClick={submitPresentation}>Submit</Button>
+    </div>
+  );
+};
+```
+
+### 6. Settings Page
+
+User preferences and wallet management.
+
+**Sections:**
+- **Profile:** DID display and copy
+- **Security:** Seed phrase backup, biometrics
+- **Consent:** Manage data sharing preferences
+- **Connections:** View and manage trusted parties
+- **Appearance:** Theme, language settings
+- **About:** App version, terms, privacy
+
+## Cryptographic Operations
+
+### Seed Phrase & Key Derivation
+
+```typescript
+import { generateMnemonic, mnemonicToSeedSync } from 'bip39';
+import * as nacl from 'tweetnacl';
+
+export const generateWallet = () => {
+  // Generate 12-word seed phrase
+  const mnemonic = generateMnemonic(128);
+  
+  // Convert to seed
+  const seed = mnemonicToSeedSync(mnemonic);
+  
+  // Derive Ed25519 key pair
+  const keyPair = nacl.sign.keyPair.fromSeed(seed.slice(0, 32));
+  
+  // Create DID
+  const publicKeyBase64 = Buffer.from(keyPair.publicKey).toString('base64');
+  const did = `did:alyra:${publicKeyBase64}`;
+  
+  return {
+    mnemonic,
+    did,
+    publicKey: keyPair.publicKey,
+    secretKey: keyPair.secretKey
+  };
+};
+```
+
+### Message Signing
+
+```typescript
+export const signMessage = (
+  message: string,
+  secretKey: Uint8Array
+): string => {
+  const messageBytes = new TextEncoder().encode(message);
+  const signature = nacl.sign.detached(messageBytes, secretKey);
+  return Buffer.from(signature).toString('base64');
+};
+
+export const verifySignature = (
+  message: string,
+  signature: string,
+  publicKey: Uint8Array
+): boolean => {
+  const messageBytes = new TextEncoder().encode(message);
+  const signatureBytes = Buffer.from(signature, 'base64');
+  
+  return nacl.sign.detached.verify(
+    messageBytes,
+    signatureBytes,
+    publicKey
+  );
+};
+```
+
+### Encrypted Backup
+
+```typescript
+export const createEncryptedBackup = async (
+  mnemonic: string,
+  password: string
+): Promise<string> => {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(mnemonic);
+  
+  // Derive key from password
+  const keyMaterial = await crypto.subtle.importKey(
+    'raw',
+    encoder.encode(password),
+    'PBKDF2',
+    false,
+    ['deriveBits', 'deriveKey']
+  );
+  
+  const key = await crypto.subtle.deriveKey(
+    {
+      name: 'PBKDF2',
+      salt: encoder.encode('sphyre-salt'),
+      iterations: 100000,
+      hash: 'SHA-256'
+    },
+    keyMaterial,
+    { name: 'AES-GCM', length: 256 },
+    true,
+    ['encrypt', 'decrypt']
+  );
+  
+  // Encrypt
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const encrypted = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv },
+    key,
+    data
+  );
+  
+  // Combine IV and encrypted data
+  const combined = new Uint8Array(iv.length + encrypted.byteLength);
+  combined.set(iv);
+  combined.set(new Uint8Array(encrypted), iv.length);
+  
+  return Buffer.from(combined).toString('base64');
+};
+```
+
+## API Integration
+
+### API Service
+
+```typescript
+class ApiService {
+  private baseURL = 'https://api.sphyre.tech';
+  
+  async getCredentials(did: string) {
+    const response = await fetch(`${this.baseURL}/api/wallet/${did}/credentials`, {
+      headers: {
+        'Authorization': `Bearer ${getToken()}`,
+        'X-User-DID': did
+      }
+    });
+    
+    return response.json();
+  }
+  
+  async submitCredentialRequest(request: CredentialRequest) {
+    const response = await fetch(`${this.baseURL}/api/issuer/request`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${getToken()}`
+      },
+      body: JSON.stringify(request)
+    });
+    
+    return response.json();
+  }
+  
+  async submitPresentation(requestId: string, presentation: Presentation) {
+    const response = await fetch(
+      `${this.baseURL}/api/verifier/submit/${requestId}`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${getToken()}`
+        },
+        body: JSON.stringify(presentation)
+      }
+    );
+    
+    return response.json();
+  }
+}
+
+export const apiService = new ApiService();
+```
+
+## PWA Features
+
+### Service Worker
+
+Enables offline functionality and credential caching.
+
+```javascript
+// sw.js
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches.open('sphyre-v1').then((cache) => {
+      return cache.addAll([
+        '/',
+        '/onboarding',
+        '/SSIWalletIdentity',
+        '/offline.html'
+      ]);
+    })
+  );
+});
+
+self.addEventListener('fetch', (event) => {
+  event.respondWith(
+    caches.match(event.request).then((response) => {
+      return response || fetch(event.request);
+    })
+  );
+});
+```
+
+### Manifest
+
+```json
+{
+  "name": "Sphyre ALV",
+  "short_name": "Sphyre",
+  "description": "Your Self-Sovereign Identity Wallet",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#6366F1",
+  "icons": [
+    {
+      "src": "/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
+```
+
+## UI Components
+
+### Credential Card
+
+```typescript
+const CredentialCard = ({ credential }: { credential: Credential }) => {
+  return (
+    <div className="credential-card bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl p-6 text-white">
+      <div className="flex justify-between items-start mb-4">
+        <div>
+          <h3 className="text-xl font-bold">{credential.type}</h3>
+          <p className="text-sm opacity-80">{credential.issuerName}</p>
+        </div>
+        <Badge status={credential.status} />
+      </div>
+      
+      <div className="space-y-2">
+        {Object.entries(credential.claims).map(([key, value]) => (
+          <div key={key} className="flex justify-between">
+            <span className="opacity-80">{formatLabel(key)}:</span>
+            <span className="font-medium">{value}</span>
+          </div>
+        ))}
+      </div>
+      
+      <div className="mt-4 flex gap-2">
+        <Button onClick={() => showQR(credential)}>Show QR</Button>
+        <Button variant="outline" onClick={() => viewDetails(credential)}>
+          Details
+        </Button>
+      </div>
+    </div>
+  );
+};
+```
+
+### QR Scanner
+
+```typescript
+import { QrReader } from 'react-qr-reader';
+
+const QRScanner = ({ onScan }: { onScan: (data: string) => void }) => {
+  const [error, setError] = useState(null);
+  
+  return (
+    <div className="qr-scanner">
+      <QrReader
+        onResult={(result, error) => {
+          if (result) {
+            onScan(result.text);
+          }
+          if (error) {
+            setError(error);
+          }
+        }}
+        constraints={{ facingMode: 'environment' }}
+        className="w-full"
+      />
+      {error && <p className="text-red-500 mt-2">{error.message}</p>}
+    </div>
+  );
+};
+```
+
+## Security Best Practices
+
+<AccordionGroup>
+  <Accordion icon="lock" title="Seed Phrase Storage">
+    - Never send seed phrase over network
+    - Store encrypted in localStorage
+    - Prompt for biometric verification before display
+    - Clear from memory after use
+  </Accordion>
+  
+  <Accordion icon="shield" title="Private Key Protection">
+    - Keep private keys in memory only when needed
+    - Use Web Crypto API for operations
+    - Never log or expose private keys
+    - Implement auto-lock after inactivity
+  </Accordion>
+  
+  <Accordion icon="globe" title="Network Security">
+    - HTTPS only connections
+    - Certificate pinning
+    - Request/response validation
+    - Timeout handling
+  </Accordion>
+  
+  <Accordion icon="eye" title="UI Security">
+    - Screen capture prevention for seed phrase
+    - Blur sensitive data when app backgrounded
+    - Session timeout
+    - Clipboard clearing after copy
+  </Accordion>
+</AccordionGroup>
+
+## User Experience
+
+### Loading States
+
+```typescript
+const LoadingScreen = ({ status }: { status: string }) => {
+  return (
+    <div className="loading-screen">
+      <div className="spinner" />
+      <p className="text-gray-600 mt-4">{status}</p>
+      <p className="text-sm text-gray-400 mt-2">
+        This won't take long...
+      </p>
+    </div>
+  );
+};
+```
+
+### Error Handling
+
+```typescript
+const ErrorBoundary = ({ children }: { children: ReactNode }) => {
+  const [hasError, setHasError] = useState(false);
+  
+  useEffect(() => {
+    const handler = (error: Error) => {
+      console.error('App error:', error);
+      setHasError(true);
+      
+      // Show user-friendly message
+      toast.error('Something went wrong. Please try again.');
+    };
+    
+    window.addEventListener('error', handler);
+    return () => window.removeEventListener('error', handler);
+  }, []);
+  
+  if (hasError) {
+    return <ErrorFallback onReset={() => setHasError(false)} />;
+  }
+  
+  return <>{children}</>;
+};
+```
+
+## Offline Support
+
+Sphyre ALV works offline with cached credentials:
+
+```typescript
+const useOfflineMode = () => {
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+  
+  return isOnline;
+};
+```
+
+## Resources
+
+<CardGroup cols={2}>
+  <Card
+    title="User Guide"
+    icon="book"
+    href="/guides/wallet-setup"
+  >
+    Complete wallet setup guide
+  </Card>
+  
+  <Card
+    title="API Reference"
+    icon="code"
+    href="/api-reference/wallet/get-credentials"
+  >
+    Wallet API documentation
+  </Card>
+  
+  <Card
+    title="Live Demo"
+    icon="globe"
+    href="https://app.sphyre.tech"
+  >
+    Try Sphyre ALV
+  </Card>
+  
+  <Card
+    title="GitHub"
+    icon="github"
+    href="https://github.com/sphyre/sphyre-alv"
+  >
+    Source code
+  </Card>
+</CardGroup>

@@ -1,0 +1,893 @@
+---
+title: "Sphyre Issuers"
+description: "Organization dashboard for issuing and managing verifiable credentials"
+---
+
+# Sphyre Issuers
+
+Sphyre Issuers is the web-based dashboard designed for organizations to issue, manage, and revoke verifiable credentials. It provides a complete workflow for credential lifecycle management.
+
+## Overview
+
+**Sphyre Issuers** enables organizations to become credential issuers in the SSI ecosystem, managing schemas, templates, and the full issuance workflow.
+
+<CardGroup cols={2}>
+  <Card title="Technology" icon="code">
+    **Framework:** React 18  
+    **Language:** TypeScript  
+    **URL:** `https://issuers.sphyre.tech`
+  </Card>
+  
+  <Card title="Key Features" icon="star">
+    Schema management  
+    Template customization  
+    Multi-step issuance  
+    Credential tracking
+  </Card>
+</CardGroup>
+
+## Key Features
+
+<AccordionGroup>
+  <Accordion icon="shapes" title="Schema Management">
+    - Create custom credential schemas
+    - Define field types and validation rules
+    - Version control for schemas
+    - Import/export schema definitions
+    - Schema library with pre-built templates
+  </Accordion>
+  
+  <Accordion icon="palette" title="Template Customization">
+    - Design credential appearance
+    - Custom branding and colors
+    - Logo and image uploads
+    - Preview before publishing
+    - Multiple templates per schema
+  </Accordion>
+  
+  <Accordion icon="certificate" title="Credential Issuance">
+    - Manual credential creation
+    - Batch issuance from CSV
+    - QR code generation for offers
+    - Credential request approval workflow
+    - Automated issuance rules
+  </Accordion>
+  
+  <Accordion icon="list-check" title="Request Management">
+    - View incoming credential requests
+    - Review applicant information
+    - Approve or reject with reasons
+    - Automated verification checks
+    - Request history and analytics
+  </Accordion>
+  
+  <Accordion icon="ban" title="Lifecycle Management">
+    - Revoke credentials instantly
+    - Set expiration dates
+    - Update credential status
+    - Re-issue credentials
+    - Track credential usage
+  </Accordion>
+  
+  <Accordion icon="chart-line" title="Analytics & Reporting">
+    - Issuance statistics
+    - Usage metrics
+    - Verification tracking
+    - Export reports
+    - Dashboard insights
+  </Accordion>
+</AccordionGroup>
+
+## Application Structure
+
+```
+sphyre-issuers/
+├── src/
+│   ├── pages/
+│   │   ├── Dashboard.js           # Main dashboard
+│   │   ├── Schemas.js             # Schema management
+│   │   ├── Templates.js           # Template management
+│   │   ├── IssueCredential.js     # Issuance workflow
+│   │   ├── CredentialRequests.js  # Pending requests
+│   │   ├── IssuedCredentials.js   # Credential tracking
+│   │   └── Analytics.js           # Statistics
+│   ├── components/
+│   │   ├── SchemaBuilder.js       # Visual schema editor
+│   │   ├── TemplateDesigner.js    # Template customization
+│   │   ├── CredentialForm.js      # Dynamic form generator
+│   │   ├── RequestCard.js         # Request display
+│   │   └── QRGenerator.js         # QR code creation
+│   ├── services/
+│   │   ├── apiService.js          # API client
+│   │   ├── authService.js         # Authentication
+│   │   └── storageService.js      # Local storage
+│   ├── contexts/
+│   │   ├── AuthContext.js         # Auth state
+│   │   └── IssuerContext.js       # Issuer data
+│   └── utils/
+│       ├── validation.js          # Form validation
+│       └── formatting.js          # Data formatting
+├── public/
+│   └── assets/
+└── package.json
+```
+
+## Core Workflows
+
+### 1. Schema Creation
+
+Define the structure of credentials you'll issue.
+
+**Schema Builder Interface:**
+```typescript
+interface CredentialSchema {
+  id: string;
+  name: string;
+  version: string;
+  description: string;
+  fields: FieldDefinition[];
+  issuerDid: string;
+  createdAt: Date;
+}
+
+interface FieldDefinition {
+  name: string;
+  type: 'string' | 'number' | 'date' | 'boolean' | 'email' | 'url';
+  required: boolean;
+  description?: string;
+  validation?: ValidationRule;
+  defaultValue?: any;
+}
+```
+
+**Example Schema:**
+```json
+{
+  "id": "university-degree-v1",
+  "name": "University Degree",
+  "version": "1.0.0",
+  "description": "Academic degree credential",
+  "fields": [
+    {
+      "name": "studentName",
+      "type": "string",
+      "required": true,
+      "description": "Full legal name of graduate"
+    },
+    {
+      "name": "degreeType",
+      "type": "string",
+      "required": true,
+      "validation": {
+        "enum": ["Bachelor", "Master", "Doctorate"]
+      }
+    },
+    {
+      "name": "fieldOfStudy",
+      "type": "string",
+      "required": true
+    },
+    {
+      "name": "graduationDate",
+      "type": "date",
+      "required": true
+    },
+    {
+      "name": "gpa",
+      "type": "number",
+      "required": false,
+      "validation": {
+        "min": 0.0,
+        "max": 4.0
+      }
+    }
+  ]
+}
+```
+
+**Schema Builder Component:**
+```jsx
+const SchemaBuilder = () => {
+  const [schema, setSchema] = useState({
+    name: '',
+    version: '1.0.0',
+    fields: []
+  });
+  
+  const addField = () => {
+    setSchema({
+      ...schema,
+      fields: [...schema.fields, {
+        name: '',
+        type: 'string',
+        required: false
+      }]
+    });
+  };
+  
+  const updateField = (index, updates) => {
+    const newFields = [...schema.fields];
+    newFields[index] = { ...newFields[index], ...updates };
+    setSchema({ ...schema, fields: newFields });
+  };
+  
+  const saveSchema = async () => {
+    await apiService.createSchema(schema);
+    toast.success('Schema created successfully!');
+  };
+  
+  return (
+    <div className="schema-builder">
+      <Input
+        label="Schema Name"
+        value={schema.name}
+        onChange={(e) => setSchema({ ...schema, name: e.target.value })}
+      />
+      
+      <div className="fields-section">
+        <h3>Fields</h3>
+        {schema.fields.map((field, index) => (
+          <FieldEditor
+            key={index}
+            field={field}
+            onChange={(updates) => updateField(index, updates)}
+          />
+        ))}
+        <Button onClick={addField}>Add Field</Button>
+      </div>
+      
+      <Button onClick={saveSchema} variant="primary">
+        Save Schema
+      </Button>
+    </div>
+  );
+};
+```
+
+### 2. Template Design
+
+Customize the visual appearance of credentials.
+
+**Template Designer:**
+```jsx
+const TemplateDesigner = ({ schema }) => {
+  const [template, setTemplate] = useState({
+    schemaId: schema.id,
+    name: '',
+    design: {
+      backgroundColor: '#1E40AF',
+      textColor: '#FFFFFF',
+      logo: null,
+      layout: 'standard'
+    }
+  });
+  
+  const uploadLogo = async (file) => {
+    const formData = new FormData();
+    formData.append('logo', file);
+    
+    const response = await apiService.uploadImage(formData);
+    setTemplate({
+      ...template,
+      design: { ...template.design, logo: response.url }
+    });
+  };
+  
+  return (
+    <div className="template-designer">
+      <div className="design-controls">
+        <ColorPicker
+          label="Background Color"
+          value={template.design.backgroundColor}
+          onChange={(color) => setTemplate({
+            ...template,
+            design: { ...template.design, backgroundColor: color }
+          })}
+        />
+        
+        <ImageUpload
+          label="Organization Logo"
+          onUpload={uploadLogo}
+        />
+        
+        <Select
+          label="Layout"
+          value={template.design.layout}
+          options={['standard', 'compact', 'detailed']}
+          onChange={(layout) => setTemplate({
+            ...template,
+            design: { ...template.design, layout }
+          })}
+        />
+      </div>
+      
+      <div className="preview">
+        <CredentialPreview template={template} schema={schema} />
+      </div>
+    </div>
+  );
+};
+```
+
+### 3. Credential Issuance Workflow
+
+Multi-step process for issuing credentials.
+
+**Issuance Steps:**
+1. Select schema and template
+2. Enter credential data
+3. Review information
+4. Issue and sign credential
+5. Generate QR code offer
+
+**Implementation:**
+```jsx
+const IssueCredential = () => {
+  const [step, setStep] = useState(1);
+  const [selectedSchema, setSelectedSchema] = useState(null);
+  const [selectedTemplate, setSelectedTemplate] = useState(null);
+  const [credentialData, setCredentialData] = useState({});
+  const [recipient, setRecipient] = useState('');
+  
+  const issueCredential = async () => {
+    try {
+      // Create credential request
+      const request = {
+        schemaId: selectedSchema.id,
+        templateId: selectedTemplate.id,
+        recipientDid: recipient,
+        claims: credentialData,
+        issuerDid: getIssuerDid()
+      };
+      
+      // Issue via API
+      const credential = await apiService.issueCredential(request);
+      
+      // Generate QR code offer
+      const qrCode = await generateQRCode({
+        type: 'CredentialOffer',
+        credentialId: credential.id,
+        issuer: getIssuerDid()
+      });
+      
+      setQRCode(qrCode);
+      toast.success('Credential issued successfully!');
+      
+    } catch (error) {
+      toast.error('Failed to issue credential');
+      console.error(error);
+    }
+  };
+  
+  return (
+    <MultiStepWizard currentStep={step}>
+      <Step1_SelectSchema onSelect={setSelectedSchema} />
+      <Step2_SelectTemplate 
+        schema={selectedSchema} 
+        onSelect={setSelectedTemplate} 
+      />
+      <Step3_EnterData 
+        schema={selectedSchema}
+        onChange={setCredentialData}
+        onRecipientChange={setRecipient}
+      />
+      <Step4_Review 
+        data={credentialData}
+        recipient={recipient}
+        onIssue={issueCredential}
+      />
+    </MultiStepWizard>
+  );
+};
+```
+
+### 4. Request Management
+
+Handle incoming credential requests from users.
+
+**Request List:**
+```jsx
+const CredentialRequests = () => {
+  const [requests, setRequests] = useState([]);
+  const [filter, setFilter] = useState('pending');
+  
+  useEffect(() => {
+    fetchRequests();
+  }, [filter]);
+  
+  const fetchRequests = async () => {
+    const data = await apiService.getCredentialRequests(
+      getIssuerDid(),
+      filter
+    );
+    setRequests(data);
+  };
+  
+  const approveRequest = async (requestId) => {
+    await apiService.approveCredentialRequest(requestId);
+    toast.success('Request approved and credential issued!');
+    fetchRequests();
+  };
+  
+  const rejectRequest = async (requestId, reason) => {
+    await apiService.rejectCredentialRequest(requestId, reason);
+    toast.info('Request rejected');
+    fetchRequests();
+  };
+  
+  return (
+    <div className="requests-page">
+      <div className="header">
+        <h1>Credential Requests</h1>
+        <FilterTabs
+          options={['pending', 'approved', 'rejected']}
+          selected={filter}
+          onChange={setFilter}
+        />
+      </div>
+      
+      <div className="requests-list">
+        {requests.map(request => (
+          <RequestCard
+            key={request.id}
+            request={request}
+            onApprove={() => approveRequest(request.id)}
+            onReject={(reason) => rejectRequest(request.id, reason)}
+          />
+        ))}
+      </div>
+    </div>
+  );
+};
+```
+
+**Request Card Component:**
+```jsx
+const RequestCard = ({ request, onApprove, onReject }) => {
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  
+  return (
+    <div className="request-card">
+      <div className="request-header">
+        <h3>{request.schemaName}</h3>
+        <Badge status={request.status} />
+      </div>
+      
+      <div className="request-details">
+        <InfoRow label="Requester DID" value={truncateDid(request.holderDid)} />
+        <InfoRow label="Requested" value={formatDate(request.createdAt)} />
+        <InfoRow label="Template" value={request.templateName} />
+      </div>
+      
+      <div className="request-data">
+        <h4>Submitted Information</h4>
+        {Object.entries(request.claims).map(([key, value]) => (
+          <DataField key={key} label={key} value={value} />
+        ))}
+      </div>
+      
+      {request.status === 'pending' && (
+        <div className="actions">
+          <Button onClick={onApprove} variant="success">
+            Approve & Issue
+          </Button>
+          <Button onClick={() => setShowRejectModal(true)} variant="danger">
+            Reject
+          </Button>
+        </div>
+      )}
+      
+      {showRejectModal && (
+        <RejectModal
+          onConfirm={(reason) => {
+            onReject(reason);
+            setShowRejectModal(false);
+          }}
+          onCancel={() => setShowRejectModal(false)}
+        />
+      )}
+    </div>
+  );
+};
+```
+
+### 5. Batch Issuance
+
+Issue multiple credentials from CSV file.
+
+```jsx
+const BatchIssuance = () => {
+  const [csvData, setCsvData] = useState([]);
+  const [progress, setProgress] = useState(0);
+  
+  const handleFileUpload = (file) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const csv = parseCSV(e.target.result);
+      setCsvData(csv);
+    };
+    reader.readAsText(file);
+  };
+  
+  const issueBatch = async () => {
+    const total = csvData.length;
+    
+    for (let i = 0; i < csvData.length; i++) {
+      const row = csvData[i];
+      
+      await apiService.issueCredential({
+        schemaId: selectedSchema.id,
+        templateId: selectedTemplate.id,
+        recipientDid: row.did,
+        claims: row
+      });
+      
+      setProgress(((i + 1) / total) * 100);
+    }
+    
+    toast.success(`${total} credentials issued successfully!`);
+  };
+  
+  return (
+    <div className="batch-issuance">
+      <FileUpload
+        accept=".csv"
+        onUpload={handleFileUpload}
+      />
+      
+      {csvData.length > 0 && (
+        <>
+          <DataPreview data={csvData.slice(0, 5)} />
+          <p>{csvData.length} credentials ready to issue</p>
+          <Button onClick={issueBatch}>Issue All</Button>
+          {progress > 0 && <ProgressBar value={progress} />}
+        </>
+      )}
+    </div>
+  );
+};
+```
+
+## Credential Tracking
+
+View and manage all issued credentials.
+
+```jsx
+const IssuedCredentials = () => {
+  const [credentials, setCredentials] = useState([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  
+  const filteredCredentials = credentials.filter(cred =>
+    cred.holderName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    cred.id.includes(searchTerm)
+  );
+  
+  const revokeCredential = async (credentialId) => {
+    if (confirm('Are you sure you want to revoke this credential?')) {
+      await apiService.revokeCredential(credentialId);
+      toast.success('Credential revoked');
+      fetchCredentials();
+    }
+  };
+  
+  return (
+    <div className="issued-credentials">
+      <SearchBar
+        value={searchTerm}
+        onChange={setSearchTerm}
+        placeholder="Search by holder or credential ID"
+      />
+      
+      <Table>
+        <thead>
+          <tr>
+            <th>Credential Type</th>
+            <th>Holder</th>
+            <th>Issued Date</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {filteredCredentials.map(cred => (
+            <tr key={cred.id}>
+              <td>{cred.schemaName}</td>
+              <td>{truncateDid(cred.holderDid)}</td>
+              <td>{formatDate(cred.issuedAt)}</td>
+              <td><Badge status={cred.status} /></td>
+              <td>
+                <Button size="sm" onClick={() => viewDetails(cred)}>
+                  View
+                </Button>
+                {cred.status === 'active' && (
+                  <Button 
+                    size="sm" 
+                    variant="danger"
+                    onClick={() => revokeCredential(cred.id)}
+                  >
+                    Revoke
+                  </Button>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </Table>
+    </div>
+  );
+};
+```
+
+## Analytics Dashboard
+
+Track issuance metrics and statistics.
+
+```jsx
+const Analytics = () => {
+  const [stats, setStats] = useState(null);
+  const [timeRange, setTimeRange] = useState('30d');
+  
+  useEffect(() => {
+    fetchAnalytics();
+  }, [timeRange]);
+  
+  const fetchAnalytics = async () => {
+    const data = await apiService.getAnalytics(getIssuerDid(), timeRange);
+    setStats(data);
+  };
+  
+  return (
+    <div className="analytics-dashboard">
+      <div className="time-range-selector">
+        <Button onClick={() => setTimeRange('7d')}>Last 7 Days</Button>
+        <Button onClick={() => setTimeRange('30d')}>Last 30 Days</Button>
+        <Button onClick={() => setTimeRange('1y')}>Last Year</Button>
+      </div>
+      
+      <div className="stats-grid">
+        <StatCard
+          title="Total Issued"
+          value={stats?.totalIssued}
+          icon="certificate"
+        />
+        <StatCard
+          title="Active Credentials"
+          value={stats?.activeCount}
+          icon="check-circle"
+        />
+        <StatCard
+          title="Revoked"
+          value={stats?.revokedCount}
+          icon="ban"
+        />
+        <StatCard
+          title="Verifications"
+          value={stats?.verificationCount}
+          icon="shield-check"
+        />
+      </div>
+      
+      <div className="charts">
+        <IssuanceChart data={stats?.issuanceOverTime} />
+        <CredentialTypesPieChart data={stats?.byType} />
+      </div>
+    </div>
+  );
+};
+```
+
+## QR Code Generation
+
+Create QR codes for credential offers.
+
+```jsx
+import QRCode from 'qrcode.react';
+
+const QRGenerator = ({ credentialId, issuerDid }) => {
+  const offerData = {
+    type: 'CredentialOffer',
+    credentialId,
+    issuer: issuerDid,
+    url: `https://api.sphyre.tech/api/issuer/offer/${credentialId}`
+  };
+  
+  const qrValue = JSON.stringify(offerData);
+  
+  const downloadQR = () => {
+    const canvas = document.getElementById('qr-canvas');
+    const url = canvas.toDataURL('image/png');
+    const link = document.createElement('a');
+    link.download = `credential-offer-${credentialId}.png`;
+    link.href = url;
+    link.click();
+  };
+  
+  return (
+    <div className="qr-generator">
+      <QRCode
+        id="qr-canvas"
+        value={qrValue}
+        size={256}
+        level="H"
+        includeMargin={true}
+      />
+      <Button onClick={downloadQR}>Download QR Code</Button>
+    </div>
+  );
+};
+```
+
+## Authentication
+
+Issuer organizations authenticate with their DID.
+
+```jsx
+const Login = () => {
+  const [did, setDid] = useState('');
+  const [password, setPassword] = useState('');
+  
+  const handleLogin = async () => {
+    try {
+      const response = await apiService.login({ did, password });
+      
+      // Store token
+      localStorage.setItem('token', response.token);
+      localStorage.setItem('issuerDid', did);
+      
+      // Redirect to dashboard
+      navigate('/dashboard');
+      
+    } catch (error) {
+      toast.error('Login failed. Please check your credentials.');
+    }
+  };
+  
+  return (
+    <div className="login-page">
+      <Card>
+        <h1>Issuer Login</h1>
+        <Input
+          label="Organization DID"
+          value={did}
+          onChange={(e) => setDid(e.target.value)}
+          placeholder="did:alyra:..."
+        />
+        <Input
+          label="Password"
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+        />
+        <Button onClick={handleLogin}>Login</Button>
+      </Card>
+    </div>
+  );
+};
+```
+
+## API Integration
+
+```javascript
+class IssuerApiService {
+  baseURL = 'https://api.sphyre.tech';
+  
+  async createSchema(schema) {
+    return await this.post('/api/issuer/schema', schema);
+  }
+  
+  async issueCredential(request) {
+    return await this.post('/api/issuer/issue', request);
+  }
+  
+  async getCredentialRequests(issuerDid, status = 'pending') {
+    return await this.get(`/api/issuer/requests?status=${status}`);
+  }
+  
+  async approveCredentialRequest(requestId) {
+    return await this.post(`/api/issuer/request/${requestId}/approve`);
+  }
+  
+  async revokeCredential(credentialId) {
+    return await this.post(`/api/issuer/revoke/${credentialId}`);
+  }
+  
+  async getAnalytics(issuerDid, timeRange) {
+    return await this.get(`/api/issuer/analytics?range=${timeRange}`);
+  }
+  
+  async post(endpoint, data) {
+    const response = await fetch(`${this.baseURL}${endpoint}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${this.getToken()}`
+      },
+      body: JSON.stringify(data)
+    });
+    return response.json();
+  }
+  
+  async get(endpoint) {
+    const response = await fetch(`${this.baseURL}${endpoint}`, {
+      headers: {
+        'Authorization': `Bearer ${this.getToken()}`
+      }
+    });
+    return response.json();
+  }
+  
+  getToken() {
+    return localStorage.getItem('token');
+  }
+}
+
+export const apiService = new IssuerApiService();
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion icon="check-circle" title="Credential Quality">
+    - Verify all data before issuance
+    - Use clear field names and descriptions
+    - Set appropriate expiration dates
+    - Include contact information in templates
+  </Accordion>
+  
+  <Accordion icon="shield" title="Security">
+    - Require multi-factor authentication
+    - Audit all issuance actions
+    - Implement role-based access control
+    - Regular security reviews
+  </Accordion>
+  
+  <Accordion icon="users" title="User Experience">
+    - Provide clear rejection reasons
+    - Fast approval processes
+    - Mobile-responsive design
+    - Helpful error messages
+  </Accordion>
+  
+  <Accordion icon="database" title="Data Management">
+    - Regular backups
+    - Data retention policies
+    - GDPR compliance
+    - Secure credential storage
+  </Accordion>
+</AccordionGroup>
+
+## Resources
+
+<CardGroup cols={2}>
+  <Card
+    title="Issuing Guide"
+    icon="book"
+    href="/guides/issuing-credentials"
+  >
+    Complete issuance tutorial
+  </Card>
+  
+  <Card
+    title="API Reference"
+    icon="code"
+    href="/api-reference/issuer/issue-credential"
+  >
+    Issuer API documentation
+  </Card>
+  
+  <Card
+    title="Live Demo"
+    icon="globe"
+    href="https://issuers.sphyre.tech"
+  >
+    Try Sphyre Issuers
+  </Card>
+  
+  <Card
+    title="GitHub"
+    icon="github"
+    href="https://github.com/sphyre/sphyre-issuers"
+  >
+    Source code
+  </Card>
+</CardGroup>
