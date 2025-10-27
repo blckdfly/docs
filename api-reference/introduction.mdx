@@ -1,33 +1,71 @@
 ---
-title: 'Introduction'
-description: 'Example section for showcasing API endpoints'
+title: 'API Overview'
+description: 'Sphyre Fortro Engine REST API overview and usage guide'
 ---
 
-<Note>
-  If you're not looking to build API reference documentation, you can delete
-  this section by removing the api-reference folder.
-</Note>
+<Alert>
+  Sphyre's API surface is continuously evolving. Review release notes and regenerate the OpenAPI specification whenever backend routes change.
+</Alert>
 
 ## Welcome
 
-There are two ways to build API documentation: [OpenAPI](https://mintlify.com/docs/api-playground/openapi/setup) and [MDX components](https://mintlify.com/docs/api-playground/mdx/configuration). For the starter kit, we are using the following OpenAPI specification.
+Fortro Engine exposes REST endpoints consumed by the ALV wallet, Issuer dashboard, and Verifier portal. This section summarizes the top-level concepts before diving into endpoint details.
 
-<Card
-  title="Plant Store Endpoints"
-  icon="leaf"
-  href="https://github.com/mintlify/starter/blob/main/api-reference/openapi.json"
->
-  View the OpenAPI specification file
-</Card>
+<CardGroup cols={2}>
+  <Card title="Auth & DID" icon="key" href="/api-reference/authentication">
+    Challenge-based DID login, JWT issuance, and session renewal.
+  </Card>
+  <Card title="Wallet" icon="wallet" href="/api-reference/wallet/get-credentials">
+    Holder credential management, presentation approvals, consent APIs.
+  </Card>
+  <Card title="Issuer" icon="building" href="/api-reference/issuer/create-schema">
+    Schema, template, offer, and credential issuance endpoints.
+  </Card>
+  <Card title="Verifier" icon="shield" href="/api-reference/verifier/create-request">
+    Presentation request lifecycle, polling, and verification results.
+  </Card>
+</CardGroup>
+
+## Base URLs
+
+```text
+Production: https://api.sphyre.tech
+Staging:    https://staging-api.sphyre.tech (if enabled)
+```
+
+All endpoints live under `/api/*`. For example, the health check resides at `GET https://api.sphyre.tech/api/health`.
 
 ## Authentication
 
-All API endpoints are authenticated using Bearer tokens and picked up from the specification file.
+Every request must include a JWT issued after the DID challenge/response flow:
+
+```http
+Authorization: Bearer <JWT_TOKEN>
+X-User-DID: did:alyra:...
+```
+
+Issuer flows may also require the `X-Issuer-DID` header. JWTs expire after `JWT_EXPIRATION` seconds (default 86400); refresh via `POST /api/auth/login`.
+
+## Rate Limiting & Errors
+
+- Standard rate limit: 120 requests/minute per DID (subject to change). Exceeding limits returns HTTP 429 with `Retry-After`.
+- Errors follow the unified `AppError` schema:
 
 ```json
-"security": [
-  {
-    "bearerAuth": []
+{
+  "error": {
+    "message": "Validation error: Missing template_id",
+    "code": 400
   }
-]
+}
 ```
+
+## Generating API Reference
+
+1. Export the latest OpenAPI spec from the backend (e.g., `scripts/export_openapi.sh` once available).
+2. Place the spec at `docs/api-reference/openapi.json` to power interactive playgrounds.
+3. For custom MDX pages, follow the structure under `docs/api-reference/auth/*`.
+
+<Note>
+  Legacy sample files (Plant Store) were replaced. Ensure no references to unrelated sample endpoints remain.
+</Note>

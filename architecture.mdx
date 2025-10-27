@@ -52,17 +52,19 @@ The central backend service that orchestrates all SSI operations.
 
 **Technology Stack:**
 - **Language:** Rust
-- **Framework:** Actix-web
+- **Framework:** Axum (Tokio runtime)
 - **Database:** MongoDB
 - **Storage:** IPFS (Kubo)
 - **Blockchain:** Ethereum (ethers-rs)
+- **Messaging:** Async tasks via Tokio + `tower` middleware
 
 **Key Features:**
-- RESTful API architecture
-- JWT-based authentication
+- Modular Axum routers (`/api/auth`, `/api/wallet`, `/api/issuer`, `/api/verifier`, `/api/qr`, `/api/presentation-request`, `/api/consent`)
+- Shared `AppState` for database, IPFS, and blockchain clients
+- JWT-based authentication and DID extraction middleware
 - Post-quantum cryptography (Kyber-Dilithium)
-- Concurrent request handling
-- Automatic credential verification
+- Meta-transaction support (Minimal Forwarder)
+- Automatic credential verification and presentation polling
 
 **API Endpoints:**
 ```
@@ -176,24 +178,24 @@ sequenceDiagram
 
 ```mermaid
 sequenceDiagram
-    participant V as Verifier
+    participant V as Verifier (Next.js)
     participant U as User (ALV)
-    participant F as Fortro Engine
+    participant F as Fortro Engine (Axum)
     participant IPFS as IPFS
     participant BC as Blockchain
     
-    V->>F: 1. Create presentation request
-    F->>V: 2. Return request QR code
-    V->>U: 3. Show QR code
-    U->>F: 4. Fetch request details
-    F->>U: 5. Return requirements
-    U->>U: 6. User approves + selects fields
-    U->>F: 7. Submit presentation
-    F->>IPFS: 8. Verify IPFS hash
-    F->>BC: 9. Verify blockchain anchor
-    F->>F: 10. Verify cryptographic proof
-    F->>V: 11. Return verification result
-    V->>V: 12. Display verified data
+    V->>F: 1. POST /api/wallet/presentation-requests
+    F->>V: 2. Return request + QR payload
+    V->>U: 3. Display QR code
+    U->>F: 4. GET /api/wallet/presentation-requests/:id/status
+    F->>U: 5. Respond with requirements + holder_fields
+    U->>U: 6. Holder selects attributes & signs challenge
+    U->>F: 7. POST /api/wallet/presentation-requests/:id/approve
+    F->>IPFS: 8. Fetch credential preview
+    F->>BC: 9. Verify anchor + revocation
+    F->>F: 10. Generate ZK proof / selective disclosure
+    F->>V: 11. Update status via polling endpoint
+    V->>V: 12. Display verification result
 ```
 
 ## Storage Architecture
@@ -201,38 +203,48 @@ sequenceDiagram
 ### MongoDB Collections
 
 ```javascript
-// Users Collection
+// credential_requests
 {
-  did: "did:alyra:...",
-  publicKey: "base64_string",
-  email: "user@example.com",
-  createdAt: ISODate,
-  walletData: { ... }
+  _id: ObjectId,
+  request_id: "req-uuid",
+  template_id: "template-id",
+  issuer_did: "did:alyra:...",
+  holder_did: "did:alyra:...",
+  issuer_data: { ... },
+  holder_data: { ... },
+  status: "pending | approved | rejected",
+  created_at: ISODate,
+  updated_at: ISODate
 }
 
-// Credentials Collection
+// credentials
 {
-  id: "credential_id",
-  holderDid: "did:alyra:...",
-  issuerDid: "did:alyra:...",
-  schemaId: "schema_id",
-  claims: { ... },
-  ipfsHash: "Qm...",
-  blockchainTxHash: "0x...",
-  proof: { ... },
+  _id: ObjectId,
+  credential_id: "cred-uuid",
+  holder_did: "did:alyra:...",
+  issuer_did: "did:alyra:...",
+  schema_id: "national-id-v1",
+  template_id: "national-id-template",
+  credential_preview: { ... },
+  ipfs_hash: "Qm...",
+  blockchain_tx_hash: "0x...",
+  kyber_encrypted: true,
+  kyber_secret_key: "hex...",
   status: "active|revoked",
-  issuedAt: ISODate,
-  expiresAt: ISODate
+  issued_at: ISODate,
+  expires_at: ISODate
 }
 
-// Schemas Collection
+// presentation_requests
 {
-  id: "schema_id",
-  name: "National ID",
-  version: "1.0",
-  fields: [ ... ],
-  issuerDid: "did:alyra:...",
-  createdAt: ISODate
+  _id: ObjectId,
+  request_id: "pr-uuid",
+  verifier_did: "did:alyra:...",
+  required_credentials: [ ... ],
+  status: "pending|approved|rejected|expired",
+  presentation_data: { ... },
+  updated_at: ISODate,
+  expires_at: ISODate
 }
 ```
 
@@ -283,7 +295,8 @@ struct CredentialAnchor {
 <CardGroup cols={2}>
   <Card title="Post-Quantum Crypto" icon="atom">
     **Kyber** for key encapsulation  
-    **Dilithium** for digital signatures
+    **Dilithium** for digital signatures  
+    BBS+ for selective disclosure proofs
   </Card>
   
   <Card title="DID Generation" icon="key">
@@ -366,12 +379,14 @@ All frontend applications communicate with Fortro Engine via REST API:
 ```http
 Authorization: Bearer <JWT_TOKEN>
 X-User-DID: did:alyra:...
+X-Issuer-DID: did:alyra:... (for issuer flows)
 ```
 
 **CORS Configuration:**
-- Allowed origins: `app.sphyre.tech`, `issuers.sphyre.tech`, `verifier.sphyre.tech`
-- Methods: GET, POST, PUT, DELETE
-- Headers: Content-Type, Authorization, X-User-DID
+- Allowed origins: `https://app.sphyre.tech`, `https://issuers.sphyre.tech`, `https://verifier.sphyre.tech`, `https://sphyre.tech`
+- Methods: GET, POST, PUT, DELETE, PATCH, OPTIONS
+- Headers: Content-Type, Authorization, X-User-DID, X-Issuer-DID
+- Credentials: `omit` (JWT sent via Authorization header)
 
 ## Performance & Scalability
 
@@ -419,7 +434,7 @@ X-User-DID: did:alyra:...
   </Step>
   
   <Step title="Security First">
-    Post-quantum cryptography. Defense in depth. Regular security audits.
+    Post-quantum cryptography, DID challenges, meta-transaction signer separation. Defense in depth. Regular security audits.
   </Step>
   
   <Step title="Interoperability">
@@ -435,13 +450,33 @@ X-User-DID: did:alyra:...
 
 | Aspect | Technology | Rationale |
 |--------|-----------|-----------|
-| **Backend Language** | Rust | Performance, memory safety, concurrency |
+| **Backend Language** | Rust + Axum + Tokio | Performance, memory safety, async concurrency |
 | **Frontend Framework** | Next.js/React | Developer experience, SEO, SSR/SSG |
 | **Database** | MongoDB | Flexible schema, JSON storage, scalability |
-| **Storage** | IPFS | Decentralized, content-addressed, permanent |
-| **Blockchain** | Ethereum | Mature ecosystem, smart contract support |
-| **Cryptography** | Kyber-Dilithium | Post-quantum resistant, NIST approved |
-| **Authentication** | JWT | Stateless, scalable, widely supported |
+| **Storage** | IPFS (Kubo) | Decentralized, content-addressed, permanent |
+| **Blockchain** | Ethereum (ethers-rs + Minimal Forwarder) | Smart contract + meta-tx support |
+| **Cryptography** | Kyber, Dilithium, BBS+ | Post-quantum resistant, selective disclosure |
+| **Authentication** | JWT + DID challenge | Stateless, DID-bound access |
+
+## Migration Notes (Actix → Axum)
+
+<Alert>
+  Fortro Engine migrated from Actix-web to Axum/Tokio in 2025 to simplify middleware, state sharing, and async ergonomics. Key changes for developers upgrading older guides:
+  - Replace `HttpServer::new`, `App::new`, and `web::Json` extractors with Axum `Router`, `IntoResponse`, and typed extractors (`Json<T>`, `Path<T>`, `State<AppState>`)
+  - Configure middleware via `tower` layers (`TraceLayer`, `CorsLayer`, custom DID extractor)
+  - Share dependencies (DB, IPFS, blockchain clients) through cloned `AppState`
+  - Startup now uses `axum::serve` with `TcpListener` bound to port `3000`
+  Ensure new code samples follow the Axum style. Older Actix snippets have been archived for reference only.
+</Alert>
+
+## Documentation Sync Checklist
+
+- [ ] Update diagrams when new routes or services are added (wallet, issuer, verifier, meta-tx)
+- [ ] Reflect changes to environment variables (`PORT`, `CORS_ALLOWED_ORIGINS`, blockchain addresses)
+- [ ] Verify sample payloads match current MongoDB schemas (`credential_preview`, `presentation_requests`)
+- [ ] Regenerate API reference after modifying Axum routers
+- [ ] Confirm architecture pages mention new security features (challenge/response, meta transactions)
+- [ ] Schedule quarterly review alongside backend release notes
 
 ## Next Steps
 

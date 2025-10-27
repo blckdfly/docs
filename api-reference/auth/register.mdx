@@ -1,0 +1,43 @@
+---
+title: "POST /api/auth/register"
+description: "Register a new user profile bound to a DID"
+---
+
+```http
+POST /api/auth/register HTTP/1.1
+Content-Type: application/json
+
+{
+  "did": "did:alyra:z6Mkf...",
+  "username": "alice",
+  "dilithium_pubkey_hash": "7f4a21..."
+}
+```
+
+## Body
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `did` | string | ✅ | Holder DID derived from seed (Ed25519/Dilithium key pair) |
+| `username` | string | ✅ | Friendly username (must be unique) |
+| `dilithium_pubkey_hash` | string | ✅ | SHA-256 hash (hex) of Dilithium public key used as integrity fingerprint |
+
+## Response
+
+`201 Created`
+
+```json
+{
+  "success": true,
+  "message": "User registered successfully",
+  "user": {
+    "did": "did:alyra:z6Mkf...",
+    "username": "alice",
+  }
+}
+```
+
+> Prerequisites:
+> - Wallet/issuer UI generates a 12-word seed phrase.
+> - Seed produces both Ed25519 (for signatures) and Dilithium public keys; hash the Dilithium key with SHA-256 and send it here to bind the profile to a specific PQ key.
+> - The auth token stored server-side is derived from the same seed using PBKDF2-HMAC-SHA256. Subsequent access uses the challenge flow combined with PIN-unlock locally.

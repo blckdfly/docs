@@ -1,0 +1,50 @@
+---
+title: "POST /api/auth/login"
+description: "Complete DID challenge flow and obtain JWT"
+---
+
+```http
+POST /api/auth/login HTTP/1.1
+Content-Type: application/json
+
+{
+  "did": "did:alyra:z6Mkf...",
+  "signature": "MEUCIQD...",
+  "challenge": "A1B2C3D4",
+  "dilithium_pubkey_hash": "7f4a21..."
+}
+```
+
+## Body
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `did` | string | ✅ | DID derived from seed/PIN unlock |
+| `signature` | string | ✅ | Base64 signature over the challenge using unlocked Ed25519 key |
+| `challenge` | string | ✅ | Value returned by `/api/auth/challenge` (expires ~5 minutes) |
+| `dilithium_pubkey_hash` | string | ➖ | Optional PQ hash for cross-verifying the Dilithium key used during credential issuance |
+
+## Preconditions
+
+1. User enters PIN → decrypts seed phrase → re-derives auth token (PBKDF2-HMAC-SHA256).
+2. Client calls `/api/auth/challenge` with `did` to obtain nonce.
+3. Wallet signs nonce with Ed25519 secret key (derived from same seed) and submits here.
+
+## Response
+
+`200 OK`
+
+```json
+{
+  "success": true,
+  "message": "Login successful",
+  "user": {
+    "did": "did:alyra:z6Mkf...",
+    "username": "alice",
+    "email": "alice@example.com"
+  },
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+}
+```
+
+Use the token in `Authorization: Bearer <token>` plus `X-User-DID`. Credential offer acceptance (`POST /api/wallet/offers/{id}/accept`) reuses the unlocked keys to sign the per-offer challenge, binding the issued credential to this DID.

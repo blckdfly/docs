@@ -14,7 +14,7 @@ Fortro Engine is the central backend API server that orchestrates all SSI operat
 <CardGroup cols={2}>
   <Card title="Technology" icon="gear">
     **Language:** Rust  
-    **Framework:** Actix-web  
+    **Framework:** Axum (Tokio runtime)  
     **Base URL:** `https://api.sphyre.tech`
   </Card>
   
@@ -84,14 +84,15 @@ graph TB
     **Version:** Rust 1.70+
   </Accordion>
   
-  <Accordion icon="globe" title="Actix-web Framework">
-    High-performance, async web framework for Rust
+  <Accordion icon="globe" title="Axum Web Framework">
+    Tower-based async HTTP stack backed by the Tokio runtime.
     
     ```toml
     [dependencies]
-    actix-web = "4.4"
-    actix-cors = "0.7"
-    actix-rt = "2.9"
+    axum = "0.7"
+    tower = "0.4"
+    tower-http = { version = "0.5", features = ["cors", "trace"] }
+    tokio = { version = "1.37", features = ["full"] }
     ```
   </Accordion>
   
@@ -141,37 +142,26 @@ graph TB
 ```
 fortro-engine/
 ├── src/
-│   ├── main.rs                 # Entry point
+│   ├── main.rs                 # Axum bootstrap & middleware
 │   ├── api/
-│   │   ├── auth.rs            # Authentication endpoints
-│   │   ├── wallet.rs          # Wallet management
-│   │   ├── issuer.rs          # Credential issuance
-│   │   ├── verifier.rs        # Verification endpoints
-│   │   └── qr.rs              # QR code generation
-│   ├── blockchain/
-│   │   ├── client.rs          # Ethereum client
-│   │   └── contracts.rs       # Smart contract interactions
-│   ├── middleware/
-│   │   ├── auth.rs            # JWT validation
-│   │   └── cors.rs            # CORS configuration
-│   ├── models/
-│   │   ├── user.rs            # User data structures
-│   │   ├── credential.rs      # Credential models
-│   │   └── schema.rs          # Schema definitions
-│   ├── services/
-│   │   ├── crypto.rs          # Cryptographic operations
-│   │   ├── ipfs.rs            # IPFS client
-│   │   └── zkp.rs             # Zero-knowledge proofs
-│   ├── db.rs                  # Database connection
-│   ├── config.rs              # Configuration management
-│   └── error.rs               # Error handling
-├── tests/
-│   ├── zkp_tests.rs           # ZKP unit tests
-│   └── advanced_zkp_tests.rs  # Advanced ZKP tests
-├── examples/
-│   ├── test_blockchain_connection.rs
-│   └── test_ipfs_connection.rs
-└── Cargo.toml                 # Dependencies
+│   │   ├── auth.rs            # Authentication routes
+│   │   ├── wallet.rs          # Wallet + presentation flows
+│   │   ├── issuer.rs          # Issuance routes
+│   │   ├── verifier.rs        # Verification routes
+│   │   ├── qr.rs              # QR + short URL generation
+│   │   ├── presentation_request.rs
+│   │   ├── credential_request.rs
+│   │   └── consent.rs
+│   ├── blockchain/            # Smart-contract client & ABI helpers
+│   ├── middleware/            # DID extraction, auth guards
+│   ├── models.rs              # Domain structs & enums
+│   ├── services/              # Business logic (credential, issuer, wallet)
+│   ├── utils/                 # Crypto, DID compatibility, helpers
+│   ├── db.rs                  # Mongo connection + repository helpers
+│   ├── config.rs              # Environment configuration loader
+│   └── error.rs               # Unified error type (AppError)
+├── Cargo.toml                 # Dependencies
+└── README.md / docs           # Developer notes
 ```
 
 ## API Modules
@@ -189,19 +179,21 @@ Handles user registration, login, and JWT token management.
 **Example:**
 ```rust
 pub async fn login(
-    req: web::Json<LoginRequest>,
-    db: web::Data<Database>
-) -> Result<HttpResponse, AppError> {
-    // Verify DID signature
-    let public_key = extract_public_key_from_did(&req.did)?;
-    verify_signature(&req.challenge, &req.signature, &public_key)?;
-    
-    // Generate JWT
-    let token = generate_jwt(&req.did)?;
-    
-    Ok(HttpResponse::Ok().json(LoginResponse {
+    State(state): State<AppState>,
+    Json(payload): Json<LoginRequest>,
+) -> Result<Json<LoginResponse>, AppError> {
+    let public_key = utils::did::extract_public_key(&payload.did)?;
+    utils::crypto::verify_signature(
+        payload.challenge.as_bytes(),
+        &payload.signature,
+        &public_key,
+    )?;
+
+    let token = state.auth_service().issue_jwt(&payload.did)?;
+
+    Ok(Json(LoginResponse {
         token,
-        did: req.did.clone()
+        did: payload.did,
     }))
 }
 ```
@@ -237,28 +229,25 @@ Handles credential schemas, templates, and issuance.
 **Issuance Flow:**
 ```rust
 pub async fn issue_credential(
-    req: web::Json<IssueRequest>,
-    db: web::Data<Database>,
-    ipfs: web::Data<IpfsClient>,
-    blockchain: web::Data<BlockchainClient>
-) -> Result<HttpResponse, AppError> {
-    // 1. Create credential
-    let credential = create_verifiable_credential(req.into_inner())?;
-    
-    // 2. Sign with Dilithium
-    let signature = sign_credential(&credential, &issuer_key)?;
-    credential.proof = Some(signature);
-    
-    // 3. Upload to IPFS
-    let ipfs_hash = ipfs.add_json(&credential).await?;
-    
-    // 4. Anchor on blockchain
-    let tx_hash = blockchain.anchor_credential(&ipfs_hash).await?;
-    
-    // 5. Store in database
-    db.store_credential(&credential, &ipfs_hash, &tx_hash).await?;
-    
-    Ok(HttpResponse::Ok().json(credential))
+    State(state): State<AppState>,
+    Json(request): Json<IssueCredentialRequest>,
+) -> Result<Json<IssueCredentialResponse>, AppError> {
+    let issuer_service = state.issuer_service();
+    let credential_service = state.credential_service();
+
+    let (credential, ipfs_hash, tx_hash) = credential_service
+        .issue_from_request(&request)
+        .await?;
+
+    issuer_service
+        .record_issuance(&credential, &ipfs_hash, tx_hash.as_ref())
+        .await?;
+
+    Ok(Json(IssueCredentialResponse {
+        credential,
+        ipfs_hash,
+        blockchain_tx_hash: tx_hash,
+    }))
 }
 ```
 
@@ -597,28 +586,35 @@ impl ResponseError for AppError {
 Environment variables for Fortro Engine:
 
 ```bash
-# Server
-PORT=8080
+# Core server
+PORT=3000
 HOST=0.0.0.0
-
-# Database
-MONGODB_URI=mongodb://localhost:27017
-MONGODB_DATABASE=sphyre
-
-# IPFS
-IPFS_API_URL=http://localhost:5001
-
-# Ethereum
-ETH_RPC_URL=https://mainnet.infura.io/v3/YOUR_KEY
-CONTRACT_ADDRESS=0x123...
-PRIVATE_KEY=0xabc...
-
-# JWT
 JWT_SECRET=your-secret-key
 JWT_EXPIRATION=86400
 
+# Database
+MONGODB_URI=mongodb://mongo:27017/fortro_db
+DATABASE_NAME=fortro_db
+
+# IPFS
+IPFS_API_URL=http://ipfs:5001
+IPFS_GATEWAY=https://gateway.sphyre.tech
+
+# Blockchain
+ETHEREUM_RPC_URL=https://sepolia.base.org
+BLOCKCHAIN_RPC_URL=https://sepolia.base.org
+BLOCKCHAIN_CHAIN_ID=84532
+BLOCKCHAIN_DEPLOYER_PRIVATE_KEY=0x...
+SSI_REGISTRY_ADDRESS=0x...
+MINIMAL_FORWARDER_ADDRESS=0x...
+SSI_FACTORY_ADDRESS=0x...
+
+# Issuer identity
+ISSUER_DID=did:alyra:...
+ISSUER_PRIVATE_KEY=0x...
+
 # CORS
-ALLOWED_ORIGINS=https://app.sphyre.tech,https://issuers.sphyre.tech
+CORS_ALLOWED_ORIGINS=https://app.sphyre.tech,https://verifier.sphyre.tech,https://issuers.sphyre.tech,https://sphyre.tech
 ```
 
 ## Deployment
@@ -626,14 +622,15 @@ ALLOWED_ORIGINS=https://app.sphyre.tech,https://issuers.sphyre.tech
 ### Docker Deployment
 
 ```dockerfile
-FROM rust:1.70 as builder
+FROM rust:1.74 as builder
 WORKDIR /app
 COPY . .
 RUN cargo build --release
 
-FROM debian:bullseye-slim
+FROM debian:bookworm-slim
 COPY --from=builder /app/target/release/fortro-engine /usr/local/bin/
-EXPOSE 8080
+ENV RUST_LOG=info
+EXPOSE 3000
 CMD ["fortro-engine"]
 ```
 
@@ -645,10 +642,11 @@ services:
   fortro-engine:
     build: .
     ports:
-      - "8080:8080"
+      - "3000:3000"
     environment:
-      - MONGODB_URI=mongodb://mongo:27017
-      - IPFS_API_URL=http://ipfs:5001
+      MONGODB_URI: mongodb://mongo:27017/fortro_db
+      IPFS_API_URL: http://ipfs:5001
+      CORS_ALLOWED_ORIGINS: https://app.sphyre.tech,https://verifier.sphyre.tech
     depends_on:
       - mongo
       - ipfs
@@ -686,19 +684,17 @@ mod tests {
         assert!(did.starts_with("did:alyra:"));
     }
     
-    #[actix_rt::test]
-    async fn test_credential_issuance() {
-        let app = test::init_service(
-            App::new().service(issue_credential)
-        ).await;
-        
-        let req = test::TestRequest::post()
-            .uri("/api/issuer/issue")
-            .set_json(&issue_request)
-            .to_request();
-        
-        let resp = test::call_service(&app, req).await;
-        assert_eq!(resp.status(), 200);
+    #[tokio::test]
+    async fn test_wallet_service_merges_holder_data() {
+        let state = TestHarness::new().await;
+        let request = mock_credential_request();
+        let response = state
+            .wallet_service()
+            .merge_holder_inputs(&request)
+            .await
+            .unwrap();
+
+        assert!(response.credential_preview.is_object());
     }
 }
 ```
@@ -748,22 +744,33 @@ mod tests {
 ## Monitoring & Logging
 
 ```rust
-use tracing::{info, error, warn};
+use tracing::{info, warn};
+use tower_http::trace::TraceLayer;
 
-#[actix_web::main]
-async fn main() {
+#[tokio::main(flavor = "current_thread")]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt::init();
-    
-    info!("Starting Fortro Engine on port 8080");
-    
-    HttpServer::new(|| {
-        App::new()
-            .wrap(Logger::default())
-            .service(api_routes())
-    })
-    .bind("0.0.0.0:8080")?
-    .run()
-    .await
+
+    let state = build_app_state().await?;
+
+    let app = Router::new()
+        .nest("/api", api::routes())
+        .layer(TraceLayer::new_for_http())
+        .layer(axum_middleware::from_fn_with_state(
+            state.clone(),
+            middleware::extract_user_did,
+        ))
+        .with_state(state);
+
+    info!("Starting Fortro Engine on port 3000");
+
+    axum::serve(
+        TcpListener::bind("0.0.0.0:3000").await?,
+        app.into_make_service(),
+    )
+    .await?;
+
+    Ok(())
 }
 ```
 

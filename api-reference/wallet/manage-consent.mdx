@@ -1,0 +1,43 @@
+---
+title: "POST /api/wallet/:did/consents"
+description: "Grant data sharing consent to a verifier"
+---
+
+```http
+POST /api/wallet/did:alyra:z6Mkf.../consents HTTP/1.1
+Authorization: Bearer <JWT>
+X-User-DID: did:alyra:z6Mkf...
+Content-Type: application/json
+
+{
+  "verifier_did": "did:alyra:z6MkfVerifier",
+  "purpose": "employment_verification",
+  "data_categories": ["full_name", "employment_status"],
+  "expires_at": 1769817600
+}
+```
+
+## Body
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `verifier_did` | string | ✅ | DID of the verifier receiving access |
+| `purpose` | string | ✅ | Reason for consent (stored on-chain) |
+| `data_categories` | array | ✅ | Attributes being shared |
+| `expires_at` | integer | ➖ | Optional Unix timestamp for expiry (0 = no expiry) |
+
+## Response
+
+`200 OK`
+
+```json
+{
+  "success": true,
+  "consent_id": "1c8d5c8f-9a59-4c1f-a7eb-0d35f79f4c4e",
+  "tx_hash": "0xabc123...",
+  "block_number": 123456,
+  "gas_used": "52000"
+}
+```
+
+> Consents are written to both MongoDB (`consents` collection) and the SSI Registry smart contract. Use `GET /api/wallet/:did/consents` to enumerate active consents or `POST .../consents/:consent_id/revoke` to revoke.

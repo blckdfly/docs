@@ -1,216 +1,353 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "OpenAPI Plant Store",
-    "description": "A sample API that uses a plant store as an example to demonstrate features in the OpenAPI specification",
-    "license": {
-      "name": "MIT"
-    },
-    "version": "1.0.0"
+    "title": "Sphyre Fortro Engine API",
+    "description": "REST interface for authentication, wallet, issuer, and verifier workflows in the Sphyre SSI ecosystem.",
+    "version": "2025-10-27"
   },
   "servers": [
-    {
-      "url": "http://sandbox.mintlify.com"
-    }
+    { "url": "https://api.sphyre.tech" }
   ],
-  "security": [
-    {
-      "bearerAuth": []
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "schemas": {
+      "UserSummary": {
+        "type": "object",
+        "properties": {
+          "did": { "type": "string" },
+          "username": { "type": "string" },
+          "email": { "type": "string" }
+        }
+      },
+      "ChallengeResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "challenge": { "type": "string" },
+          "expires_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "LoginResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "message": { "type": "string" },
+          "token": { "type": "string" },
+          "user": { "$ref": "#/components/schemas/UserSummary" }
+        }
+      },
+      "CredentialPreview": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "CredentialSummary": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "credential_preview": { "$ref": "#/components/schemas/CredentialPreview" },
+          "status": { "type": "string" },
+          "ipfs_hash": { "type": "string" },
+          "on_chain": { "type": "boolean" },
+          "issued_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "CredentialListResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "count": { "type": "integer" },
+          "credentials": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/CredentialSummary" }
+          }
+        }
+      },
+      "ConsentResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "consent_id": { "type": "string" },
+          "tx_hash": { "type": "string" },
+          "block_number": { "type": "integer", "nullable": true },
+          "gas_used": { "type": "string", "nullable": true }
+        }
+      },
+      "IssueCredentialResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "credential": { "type": "object", "additionalProperties": true },
+          "ipfs_hash": { "type": "string" },
+          "blockchain_tx_hash": { "type": "string", "nullable": true }
+        }
+      },
+      "PresentationRequestResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "request_id": { "type": "string" },
+          "status": { "type": "string" },
+          "created_at": { "type": "string", "format": "date-time" }
+        }
+      }
     }
+  },
+  "security": [
+    { "bearerAuth": [] }
   ],
   "paths": {
-    "/plants": {
+    "/api/auth/challenge": {
+      "post": {
+        "summary": "Generate DID login challenge",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["did"],
+                "properties": {
+                  "did": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Challenge issued",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ChallengeResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/login": {
+      "post": {
+        "summary": "Verify DID challenge signature and mint JWT",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["did", "challenge", "signature"],
+                "properties": {
+                  "did": { "type": "string" },
+                  "challenge": { "type": "string" },
+                  "signature": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "JWT issued",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/LoginResponse" }
+              }
+            }
+          },
+          "401": { "description": "Invalid signature" }
+        }
+      }
+    },
+    "/api/wallet/{did}/credentials": {
       "get": {
-        "description": "Returns all plants from the system that the user has access to",
+        "summary": "List credentials for holder",
         "parameters": [
           {
-            "name": "limit",
-            "in": "query",
-            "description": "The maximum number of results to return",
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
+            "name": "did",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
           }
         ],
         "responses": {
           "200": {
-            "description": "Plant response",
+            "description": "Credentials retrieved",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CredentialListResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/wallet/{did}/consents": {
+      "post": {
+        "summary": "Grant consent to verifier",
+        "parameters": [
+          {
+            "name": "did",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["verifier_did", "purpose", "data_categories", "access_level"],
+                "properties": {
+                  "verifier_did": { "type": "string" },
+                  "purpose": { "type": "string" },
+                  "data_categories": {
+                    "type": "array",
+                    "items": { "type": "string" }
+                  },
+                  "access_level": { "type": "integer", "minimum": 0, "maximum": 255 },
+                  "expires_at": { "type": "integer", "format": "int64" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Consent granted",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ConsentResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/issuer/{did}/issue": {
+      "post": {
+        "summary": "Issue credential from template",
+        "parameters": [
+          {
+            "name": "did",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["template_id", "holder_did", "attributes"],
+                "properties": {
+                  "template_id": { "type": "string" },
+                  "holder_did": { "type": "string" },
+                  "attributes": { "type": "object", "additionalProperties": true },
+                  "expires_at": { "type": "string", "format": "date-time" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Credential issued",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/IssueCredentialResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/verifier/requests": {
+      "post": {
+        "summary": "Create presentation request",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["verifier_did", "required_credentials", "purpose"],
+                "properties": {
+                  "verifier_did": { "type": "string" },
+                  "presentation_type": { "type": "string" },
+                  "purpose": { "type": "string" },
+                  "required_credentials": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "credential_type": { "type": "string" },
+                        "schema_ids": {
+                          "type": "array",
+                          "items": { "type": "string" }
+                        },
+                        "required_attributes": {
+                          "type": "array",
+                          "items": { "type": "string" }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Presentation request created",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/PresentationRequestResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/wallet/presentation-requests/{request_id}/status": {
+      "get": {
+        "summary": "Check presentation request status",
+        "parameters": [
+          {
+            "name": "request_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Status returned",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/Plant"
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "status": { "type": "string" },
+                    "presentation_data": { "type": "object", "additionalProperties": true },
+                    "updated_at": { "type": "string", "format": "date-time" }
                   }
                 }
               }
             }
           },
-          "400": {
-            "description": "Unexpected error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
+          "404": { "description": "Request not found" }
         }
-      },
-      "post": {
-        "description": "Creates a new plant in the store",
-        "requestBody": {
-          "description": "Plant to add to the store",
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/NewPlant"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "plant response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Plant"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "unexpected error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/plants/{id}": {
-      "delete": {
-        "description": "Deletes a single plant based on the ID supplied",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "description": "ID of plant to delete",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Plant deleted",
-            "content": {}
-          },
-          "400": {
-            "description": "unexpected error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  },
-  "webhooks": {
-    "/plant/webhook": {
-      "post": {
-        "description": "Information about a new plant added to the store",
-        "requestBody": {
-          "description": "Plant added to the store",
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/NewPlant"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Return a 200 status to indicate that the data was received successfully"
-          }
-        }
-      }
-    }
-  },
-  "components": {
-    "schemas": {
-      "Plant": {
-        "required": [
-          "name"
-        ],
-        "type": "object",
-        "properties": {
-          "name": {
-            "description": "The name of the plant",
-            "type": "string"
-          },
-          "tag": {
-            "description": "Tag to specify the type",
-            "type": "string"
-          }
-        }
-      },
-      "NewPlant": {
-        "allOf": [
-          {
-            "$ref": "#/components/schemas/Plant"
-          },
-          {
-            "required": [
-              "id"
-            ],
-            "type": "object",
-            "properties": {
-              "id": {
-                "description": "Identification number of the plant",
-                "type": "integer",
-                "format": "int64"
-              }
-            }
-          }
-        ]
-      },
-      "Error": {
-        "required": [
-          "error",
-          "message"
-        ],
-        "type": "object",
-        "properties": {
-          "error": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "message": {
-            "type": "string"
-          }
-        }
-      }
-    },
-    "securitySchemes": {
-      "bearerAuth": {
-        "type": "http",
-        "scheme": "bearer"
       }
     }
   }
