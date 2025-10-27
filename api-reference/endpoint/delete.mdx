@@ -1,4 +1,30 @@
 ---
-title: 'Delete Plant'
-openapi: 'DELETE /plants/{id}'
+title: 'DELETE /api/wallet/:did/credentials/:credential_id'
+description: 'Remove a credential from holder wallet storage'
 ---
+
+```http
+DELETE /api/wallet/did:alyra:holder456/credentials/cred-789 HTTP/1.1
+Authorization: Bearer <JWT>
+X-User-DID: did:alyra:holder456
+```
+
+## Path Parameters
+
+| Param | Description |
+|-------|-------------|
+| `did` | Holder DID requesting deletion |
+| `credential_id` | Credential identifier returned during issuance |
+
+## Response
+
+`200 OK`
+
+```json
+{
+  "success": true,
+  "message": "Credential deleted successfully"
+}
+```
+
+> Deletion only removes local wallet storage; it does not revoke the credential on blockchain. Use `POST /api/wallet/:did/credentials/:credential_id/revoke` for on-chain revocation.

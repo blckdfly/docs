@@ -3,7 +3,7 @@
   "theme": "mint",
   "name": "Sphyre Documentation",
   "colors": {
-    "primary": "#0005FF",
+    "primary": "#2126FF",
     "light": "#3D41F9",
     "dark": "#0004CC"
   },
@@ -82,8 +82,9 @@
             "group": "Wallet",
             "pages": [
               "api-reference/wallet/get-credentials",
-              "api-reference/wallet/get-connections",
-              "api-reference/wallet/manage-consent"
+              "api-reference/wallet/manage-consent",
+              "api-reference/endpoint/get",
+              "api-reference/endpoint/delete"
             ]
           },
           {
@@ -91,7 +92,8 @@
             "pages": [
               "api-reference/issuer/create-schema",
               "api-reference/issuer/issue-credential",
-              "api-reference/issuer/revoke-credential"
+              "api-reference/issuer/revoke-credential",
+              "api-reference/endpoint/create"
             ]
           },
           {

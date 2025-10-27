@@ -1,4 +1,42 @@
 ---
-title: 'Get Plants'
-openapi: 'GET /plants'
+title: 'GET /api/wallet/:did/credentials'
+description: 'Return all credentials owned by a holder DID'
 ---
+
+```http
+GET /api/wallet/did:alyra:z6Mkf.../credentials HTTP/1.1
+Authorization: Bearer <JWT>
+X-User-DID: did:alyra:z6Mkf...
+```
+
+## Path Parameters
+
+| Param | Description |
+|-------|-------------|
+| `did` | Holder DID. Backend normalizes `did:alyra:*` regardless of base58/base64 encoding. |
+
+## Response
+
+`200 OK`
+
+```json
+{
+  "success": true,
+  "credentials": [
+    {
+      "id": "cred-123",
+      "credential_preview": {
+        "full_name": "Alice Anderson",
+        "employee_id": "EMP-001"
+      },
+      "status": "active",
+      "ipfs_hash": "Qm...",
+      "on_chain": true,
+      "issued_at": "2025-10-25T19:35:00Z"
+    }
+  ],
+  "count": 1
+}
+```
+
+> Includes both legacy and SSI-issued credentials. Legacy entries populate `credential_preview` via fallback logic if missing on-chain metadata.

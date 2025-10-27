@@ -1,4 +1,63 @@
 ---
-title: 'Create Plant'
-openapi: 'POST /plants'
+title: 'POST /api/issuer/:did/issue'
+description: 'Issue a credential from an issuer template'
 ---
+
+```http
+POST /api/issuer/did:alyra:issuer123/issue HTTP/1.1
+Content-Type: application/json
+Authorization: Bearer <JWT>
+X-Issuer-DID: did:alyra:issuer123
+
+{
+  "template_id": "employee-card-v1",
+  "holder_did": "did:alyra:holder456",
+  "attributes": {
+    "full_name": "Alice Anderson",
+    "employee_id": "EMP-001",
+    "department": "R&D"
+  },
+  "expires_at": "2026-01-01T00:00:00Z"
+}
+```
+
+## Path Parameters
+
+| Param | Description |
+|-------|-------------|
+| `did` | Issuer DID authorized to issue credentials |
+
+## Request Body
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `template_id` | string | ✅ | Credential template ID configured for this issuer |
+| `holder_did` | string | ✅ | Target holder who will receive the credential |
+| `attributes` | object | ✅ | Key/value pairs matching template holder/issuer fields |
+| `expires_at` | string | ➖ | Optional ISO timestamp for credential expiry |
+
+## Response
+
+`200 OK`
+
+```json
+{
+  "success": true,
+  "credential": {
+    "id": "cred-789",
+    "template_id": "employee-card-v1",
+    "holder_did": "did:alyra:holder456",
+    "issuer_did": "did:alyra:issuer123",
+    "credential_preview": {
+      "full_name": "Alice Anderson",
+      "employee_id": "EMP-001",
+      "department": "R&D"
+    },
+    "status": "active"
+  },
+  "ipfs_hash": "Qm...",
+  "blockchain_tx_hash": "0xabc123"
+}
+```
+
+> Requires issuer authentication and the template must belong to the requesting DID. The backend uploads credential preview to IPFS and anchors the hash on-chain when blockchain client is configured.

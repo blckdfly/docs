@@ -718,13 +718,26 @@ mod tests {
     Non-blocking I/O with Tokio runtime
     
     ```rust
-    #[actix_web::main]
-    async fn main() {
-        HttpServer::new(|| App::new())
-            .workers(4)
-            .bind("0.0.0.0:8080")?
-            .run()
-            .await
+    use axum::{routing::get, Router};
+    use tokio::net::TcpListener;
+
+    #[tokio::main(flavor = "current_thread")]
+    async fn main() -> Result<(), Box<dyn std::error::Error>> {
+        let state = build_app_state().await?;
+
+        let app = Router::new()
+            .route("/api/health", get(health_handler))
+            .with_state(state.clone());
+
+        // Spawn background task (e.g., refresh presentation cache)
+        tokio::spawn(async move {
+            if let Err(err) = refresh_presentation_cache(state).await {
+                tracing::warn!("cache refresh failed: {err}");
+            }
+        });
+
+        axum::serve(TcpListener::bind("0.0.0.0:3000").await?, app.into_make_service()).await?;
+        Ok(())
     }
     ```
   </Accordion>
